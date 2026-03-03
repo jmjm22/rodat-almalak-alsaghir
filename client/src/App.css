@@ -1,0 +1,562 @@
+:root{
+  --bg1:#b8e3ff;
+  --bg2:#ffe9a8;
+  --bg3:#c9f7d4;
+
+  --card: rgba(255,255,255,0.92);
+  --stroke: rgba(74,168,255,0.28);
+
+  --primary:#4aa8ff;
+  --primary2:#38d18a;
+  --accent:#ff6fb1;
+
+  --text:#2b2b2b;
+}
+
+*{ box-sizing:border-box; }
+
+html, body{
+  margin:0;
+  padding:0;
+  width:100%;
+}
+
+body{
+  font-family:'Segoe UI',system-ui,-apple-system,Arial,sans-serif;
+  overflow-x:hidden;
+  color:var(--text);
+}
+
+/* ===== Page background ===== */
+.page{
+  min-height:100vh;
+  padding: clamp(14px,3vw,28px);
+  background:
+    radial-gradient(circle at 20% 15%, var(--bg2), transparent 55%),
+    radial-gradient(circle at 85% 20%, var(--bg3), transparent 55%),
+    linear-gradient(135deg,var(--bg1),#ffffff);
+}
+
+/* ===== Container ===== */
+.container{
+  width:min(1100px,100%);
+  margin:0 auto;
+  display:flex;
+  flex-direction:column;
+  gap:18px;
+}
+
+/* ===== Hero ===== */
+.heroCard{
+  background:rgba(255,255,255,0.82);
+  border:1px solid var(--stroke);
+  border-radius:22px;
+  padding:18px;
+  text-align:center;
+  box-shadow:0 14px 35px rgba(0,0,0,0.10);
+  backdrop-filter:blur(8px);
+}
+
+.heroTitle{
+  margin:0;
+  font-size:clamp(22px,2.6vw,34px);
+  font-weight:900;
+  color:var(--text);
+}
+
+.badgeTitle{
+  display:inline-block;
+  padding:10px 18px;
+  border-radius:999px;
+  background:rgba(255,111,177,0.18);
+  border:1px solid rgba(255,111,177,0.30);
+  color:var(--accent);
+}
+
+.heroSub{
+  margin-top:6px;
+  font-weight:800;
+  color:rgba(43,43,43,0.75);
+}
+
+/* ===== Info banner ===== */
+.infoBanner{
+  background: rgba(255,255,255,0.86);
+  border: 1px solid var(--stroke);
+  border-radius: 18px;
+  padding: 12px 14px;
+  font-weight: 900;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.06);
+  text-align: right;
+  direction: rtl;
+}
+
+/* ===== Form ===== */
+.k-form{
+  background:var(--card);
+  border:1px solid var(--stroke);
+  border-radius:22px;
+  padding: clamp(14px, 2.2vw, 22px);
+  box-shadow:0 16px 40px rgba(0,0,0,0.12);
+  direction:rtl;
+  text-align:right;
+
+  width: min(860px, 100%);
+  margin: 0 auto;
+}
+
+.k-sectionTitle{
+  margin:14px 0 10px;
+  font-weight:900;
+  color:var(--primary);
+}
+
+.k-label{
+  display:block;
+  margin-bottom:6px;
+  font-weight:900;
+  color:var(--text);
+}
+
+.reqStar{
+  color: var(--accent);
+  font-weight: 1000;
+  margin-left: 6px;
+}
+
+/* Inputs */
+.k-input,
+.k-textarea,
+select.k-input{
+  width:100%;
+  padding:12px 14px;
+  margin-bottom:14px;
+  border-radius:14px;
+  border:2px solid rgba(74,168,255,0.55);
+  font-size:16px;
+  background:#fff;
+  outline:none;
+}
+
+.k-input:focus,
+.k-textarea:focus{
+  border-color:rgba(56,209,138,0.9);
+  box-shadow:0 0 0 5px rgba(56,209,138,0.18);
+}
+
+.k-textarea{
+  min-height:100px;
+  resize:vertical;
+}
+
+/* Grid */
+.k-grid2{
+  display:grid;
+  gap:12px;
+}
+
+@media(min-width:720px){
+  .k-grid2{ grid-template-columns:1fr 1fr; }
+}
+
+/* Radios */
+.k-radioRow{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px;
+  margin-bottom:14px;
+}
+
+.k-radio{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:10px 12px;
+  border-radius:16px;
+  border:2px solid rgba(255,111,177,0.35);
+  background:#fff;
+  font-weight:800;
+  cursor:pointer;
+}
+
+/* ✅ keeps radio on the LEFT in RTL (looks nicer like your screenshot) */
+.k-radio{
+  flex-direction: row-reverse;
+  justify-content: space-between;
+  min-width: min(260px, 100%);
+}
+.k-radio input{
+  width:18px;
+  height:18px;
+  accent-color:var(--accent);
+}
+
+/* Button */
+.k-button{
+  width:100%;
+  padding:14px;
+  border:none;
+  border-radius:14px;
+  font-size:18px;
+  font-weight:900;
+  color:#fff;
+  cursor:pointer;
+  background:linear-gradient(90deg,var(--primary),var(--primary2));
+  box-shadow:0 14px 30px rgba(74,168,255,0.20);
+  transition: transform .12s ease, opacity .12s ease;
+}
+
+.k-button:hover{ transform: translateY(-1px); }
+.k-button:disabled{ opacity:0.6; cursor:not-allowed; transform:none; }
+
+/* ===== Popup ===== */
+.popupOverlay{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.45);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:16px;
+  z-index:9999;
+}
+
+.popupCard{
+  width:min(420px, 92vw);
+  background:#fff;
+  border-radius:18px;
+  padding:18px;
+  box-shadow:0 20px 60px rgba(0,0,0,.25);
+  text-align:right;
+  direction: rtl;
+}
+
+.popupCard.success{ border:2px solid rgba(56,209,138,0.9); }
+.popupCard.error{ border:2px solid rgba(220,53,69,0.85); }
+
+.popupText{
+  font-size:16px;
+  line-height:1.6;
+  margin-bottom:14px;
+  font-weight:900;
+  color: var(--text);
+  white-space: pre-line;
+}
+
+.popupBtn{
+  width:100%;
+  border:none;
+  border-radius:14px;
+  padding:12px 14px;
+  font-weight:1000;
+  cursor:pointer;
+  color:#fff;
+  background:linear-gradient(90deg,var(--primary),var(--primary2));
+}
+
+/* ===================================================== */
+/* ================= Deposit Card ====================== */
+/* ===================================================== */
+
+.depositCard{
+  background:rgba(255,255,255,0.85);
+  border:1px solid var(--stroke);
+  border-radius:18px;
+  padding:14px;
+  margin-bottom:18px;
+  box-shadow:0 12px 28px rgba(0,0,0,0.08);
+}
+
+/* Header */
+.depositHeader{
+  width:100%;
+  background:transparent;
+  border:none;
+  cursor:pointer;
+
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+}
+
+.depositHeaderRight{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  font-weight:900;
+  color:var(--text);
+}
+
+.depositHeaderLeft{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+.depositAmount{
+  font-weight:1000;
+  color:var(--accent);
+  background:rgba(255,111,177,0.18);
+  border:1px solid rgba(255,111,177,0.30);
+  padding:6px 12px;
+  border-radius:999px;
+}
+
+/* Arrow */
+.chev{
+  width:38px;
+  height:38px;
+  border-radius:12px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:rgba(74,168,255,0.12);
+  border:1px solid rgba(74,168,255,0.2);
+  font-weight:900;
+  transition:transform .25s ease;
+}
+
+.chev.up{ transform:rotate(180deg); }
+.chev.down{ transform:rotate(0); }
+
+/* Accordion animation */
+.depositBody{
+  overflow:hidden;
+  max-height:0;
+  opacity:0;
+  transform:translateY(-6px);
+  transition:all .35s ease;
+  margin-top:10px;
+}
+
+.depositCard.open .depositBody{
+  max-height:2200px;
+  opacity:1;
+  transform:translateY(0);
+}
+
+/* Bank Info */
+.depositText{
+  font-weight:700;
+  margin-bottom:10px;
+}
+
+.bankGrid{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+
+.bankRow{
+  display:flex;
+  justify-content:space-between;
+  background:#fff;
+  border:1px solid rgba(74,168,255,0.22);
+  padding:10px 12px;
+  border-radius:14px;
+}
+
+.bankKey{
+  font-weight:900;
+  color:rgba(43,43,43,0.75);
+}
+
+.bankVal{
+  font-weight:900;
+  color:var(--text);
+}
+
+.bankNote{
+  margin:10px 0;
+  font-weight:800;
+  color: #c43c3c;
+}
+
+.copyBtn{
+  width:100%;
+  padding:12px;
+  border:none;
+  border-radius:14px;
+  cursor:pointer;
+  font-weight:900;
+  color:#fff;
+  background:linear-gradient(90deg,var(--primary),var(--primary2));
+  margin-bottom:10px;
+}
+
+.uploadBox{
+  background:#fff;
+  border:1px dashed rgba(255,111,177,0.55);
+  border-radius:16px;
+  padding:12px;
+}
+
+.fileInput{
+  width:100%;
+  padding:10px;
+  border-radius:12px;
+  border:1px solid rgba(74,168,255,0.35);
+}
+
+.fileOk{
+  margin-top:8px;
+  font-weight:900;
+  color:#1b7f3a;
+}
+
+.fileErr{
+  margin-top:8px;
+  font-weight:900;
+  color:#c43c3c;
+}
+
+.depositHint{
+  margin-top:8px;
+  font-weight:900;
+  color:#c43c3c;
+}
+
+/* ✅ same width for all main blocks (hero/banner/form) */
+.heroCard,
+.infoBanner,
+.k-form{
+  width: min(860px, 100%);
+  margin: 0 auto;
+}
+
+.infoBanner{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+}
+.infoBanner{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+}
+
+/* ✅ FIX: ageGroup radios layout */
+.k-radioRow{
+  display: grid;
+  grid-template-columns: 1fr;      /* mobile: 1 per row */
+  gap: 12px;
+  margin-bottom: 14px;
+  align-items: stretch;
+}
+
+@media (min-width: 720px){
+  .k-radioRow{
+    grid-template-columns: repeat(2, minmax(0, 1fr));  /* desktop: 2x2 */
+  }
+}
+
+/* אם את רוצה שבמסך גדול מאוד יהיה 4 בשורה אחת (לא חובה) */
+@media (min-width: 1100px){
+  .k-radioRow{
+    grid-template-columns: repeat(4, minmax(0, 1fr));  /* huge: 4 in one row */
+  }
+}
+
+.k-radio{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 2px solid rgba(255,111,177,0.35);
+  background: #fff;
+
+  font-weight: 900;
+  cursor: pointer;
+
+  min-width: 0; /* ✅ prevents weird wrapping */
+  flex-direction: row-reverse; /* ✅ radio circle stays on the left in RTL */
+}
+
+.k-radio input{
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  accent-color: var(--accent);
+}
+
+
+/* =========================
+   Registration banner – MOBILE FIX
+========================= */
+
+.infoBanner{
+  text-align: center;
+  font-weight: 900;
+  line-height: 1.5;
+}
+
+/* Mobile layout */
+@media (max-width: 600px){
+
+  .infoBanner{
+    padding: 14px 16px;
+    font-size: 15px;
+  }
+
+  /* break the sentence nicely */
+  .infoBanner br{
+    display: block;
+  }
+}
+
+/* ===== FIX: Info banner looks good on mobile + desktop ===== */
+.infoBanner{
+  background: rgba(255,255,255,0.86);
+  border: 1px solid var(--stroke);
+  border-radius: 18px;
+  padding: 14px 16px;
+  font-weight: 900;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.06);
+  direction: rtl;
+  text-align: center;
+
+  width: min(860px, 100%);
+  margin: 0 auto;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+
+  line-height: 1.6;
+  font-size: 16px;
+}
+
+/* icon on the side (optional) */
+.infoBanner::before{
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* make the amount always pretty */
+.infoBanner b{
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgba(255,111,177,0.16);
+  border: 1px solid rgba(255,111,177,0.22);
+}
+
+/* mobile: stack nicely */
+@media (max-width: 560px){
+  .infoBanner{
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 14px;
+    font-size: 15px;
+  }
+
+  .infoBanner::before{
+    font-size: 20px;
+  }
+}
