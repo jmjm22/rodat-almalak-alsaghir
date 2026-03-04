@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import "./App.css";
 
-const API_BASE = "https://rodat-almalak-alsaghir.onrender.com";
+const API_BASE = import.meta.env.VITE_API_BASE || "https://rodat-almalak-alsaghir.onrender.com";
 const DEPOSIT_AMOUNT = 300;
 
 export default function Payment() {
@@ -11,48 +11,47 @@ export default function Payment() {
   const BANK_ACCOUNT = "354681";
 
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
-  const regId = params.get("id") || "";
+  const regId = (params.get("id") || "").trim();
+
+  const [regExists, setRegExists] = useState(false);
+  const [checkingReg, setCheckingReg] = useState(true);
 
   const [receiptFile, setReceiptFile] = useState(null);
   const [receiptError, setReceiptError] = useState("");
   const [loading, setLoading] = useState(false);
-
-  const [hasPlace, setHasPlace] = useState(true);
-  const [checkingPlace, setCheckingPlace] = useState(true);
 
   const [popup, setPopup] = useState({ open: false, type: "success", text: "" });
   const openPopup = (type, text) => setPopup({ open: true, type, text });
   const closePopup = () => setPopup((p) => ({ ...p, open: false }));
 
   useEffect(() => {
-    if (!regId) {
-      setCheckingPlace(false);
-      setHasPlace(false);
-      openPopup("error", "❌ رقم التسجيل غير موجود. ارجعوا لصفحة التسجيل.");
-      return;
-    }
+    const checkRegistration = async () => {
+      setCheckingReg(true);
 
-    const check = async () => {
+      if (!regId) {
+        setRegExists(false);
+        setCheckingReg(false);
+        openPopup("error", "❌ رقم التسجيل غير موجود. ارجعوا لصفحة التسجيل.");
+        return;
+      }
+
       try {
-        const res = await fetch(`${API_BASE}/api/registrations/${regId}/check-place`);
+        const res = await fetch(`${API_BASE}/api/registrations/${encodeURIComponent(regId)}`);
         if (!res.ok) {
-          setCheckingPlace(false);
+          setRegExists(false);
+          openPopup("error", "❌ لم يتم العثور على هذا التسجيل. الرجاء إعادة التسجيل.");
           return;
         }
-
-        const data = await res.json();
-        if (!data?.hasPlace) {
-          setHasPlace(false);
-          openPopup("error", "❌ عذراً، لم يعد هناك مكان شاغر في هذه المجموعة.");
-        }
-      } catch (e) {
-        console.warn("check-place failed:", e);
+        setRegExists(true);
+      } catch {
+        setRegExists(false);
+        openPopup("error", "❌ تعذر الاتصال بالخادم.");
       } finally {
-        setCheckingPlace(false);
+        setCheckingReg(false);
       }
     };
 
-    check();
+    checkRegistration();
   }, [regId]);
 
   const copyBankDetails = async () => {
@@ -68,8 +67,7 @@ export default function Payment() {
       await navigator.clipboard.writeText(text);
       openPopup("success", "✅ تم نسخ تفاصيل الحساب.");
       setTimeout(() => closePopup(), 1600);
-    } catch (e) {
-      console.warn("clipboard failed:", e);
+    } catch {
       openPopup("error", "⚠️ لم نستطع النسخ تلقائيًا. انسخوا يدويًا.");
     }
   };
@@ -99,24 +97,19 @@ export default function Payment() {
   };
 
   const canSend = useMemo(() => {
-    return !!regId && !!receiptFile && !loading && hasPlace && !checkingPlace;
-  }, [regId, receiptFile, loading, hasPlace, checkingPlace]);
+    return !!regId && regExists && !!receiptFile && !loading && !checkingReg;
+  }, [regId, regExists, receiptFile, loading, checkingReg]);
 
   const sendReceipt = async () => {
     setReceiptError("");
 
-    if (checkingPlace) {
-      openPopup("error", "⏳ نتحقق من وجود مكان... حاولوا بعد لحظة.");
+    if (checkingReg) {
+      openPopup("error", "⏳ نتحقق من التسجيل... حاولوا بعد لحظة.");
       return;
     }
 
-    if (!hasPlace) {
-      openPopup("error", "❌ لا يوجد مكان متاح في الصف.");
-      return;
-    }
-
-    if (!regId) {
-      openPopup("error", "❌ رقم التسجيل غير موجود. ارجعوا لصفحة التسجيل وحاولوا مرة أخرى.");
+    if (!regExists) {
+      openPopup("error", "❌ لم يتم العثور على هذا التسجيل. الرجاء إعادة التسجيل.");
       return;
     }
 
@@ -130,14 +123,16 @@ export default function Payment() {
       const fd = new FormData();
       fd.append("receipt", receiptFile);
 
-      const res = await fetch(`${API_BASE}/api/registrations/${regId}/receipt`, {
+      const res = await fetch(`${API_BASE}/api/registrations/${encodeURIComponent(regId)}/receipt`, {
         method: "POST",
         body: fd,
       });
 
+      const data = await res.json().catch(() => ({}));
+
       if (!res.ok) {
-        if (res.status === 404) throw new Error("not_found");
-        throw new Error("upload_failed");
+        openPopup("error", data?.message || "❌ حدث خطأ أثناء إرسال الإيصال. حاولوا مرة أخرى.");
+        return;
       }
 
       openPopup("success", "✅ تم إرسال إثبات التحويل بنجاح! شكراً لكم 💛");
@@ -146,13 +141,8 @@ export default function Payment() {
       setTimeout(() => {
         window.location.href = "/";
       }, 1200);
-    } catch (e) {
-      console.warn("send receipt failed:", e);
-      if (e?.message === "not_found") {
-        openPopup("error", "❌ لم يتم العثور على هذا التسجيل. الرجاء إعادة التسجيل.");
-      } else {
-        openPopup("error", "❌ حدث خطأ أثناء إرسال الإيصال. حاولوا مرة أخرى.");
-      }
+    } catch {
+      openPopup("error", "❌ تعذر الاتصال بالخادم أثناء رفع الصورة.");
     } finally {
       setLoading(false);
     }
@@ -165,10 +155,6 @@ export default function Payment() {
           <h2 className="heroTitle badgeTitle"> دفع العربون 💳 </h2>
           <div className="heroSub">بعد التسجيل — يرجى دفع عربون ورفع صورة التحويل</div>
         </div>
-
-        {!hasPlace && !checkingPlace ? (
-          <div className="infoBanner">❌ لا يوجد مكان متاح في هذه المجموعة حالياً.</div>
-        ) : null}
 
         <div className="k-form">
           <div className="depositText">

@@ -6,15 +6,22 @@ import path from "path";
 
 const app = express();
 
-const allowedOrigin = process.env.CLIENT_ORIGIN || "http://localhost:5173";
+const allowList = (process.env.CLIENT_ORIGIN || "http://localhost:5173")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 app.use(
   cors({
-    origin: allowedOrigin,
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true);
+      if (allowList.includes(origin)) return cb(null, true);
+      return cb(new Error("Not allowed by CORS"));
+    },
     methods: ["GET", "POST", "PATCH", "DELETE"],
     allowedHeaders: ["Content-Type"],
   })
-);app.use(express.json());
+);
 
 const PORT = process.env.PORT || 5050;
 

@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
-import "./Admin.css"
+import "./Admin.css";
+
 const API_BASE = import.meta.env.VITE_API_BASE || "https://rodat-almalak-alsaghir.onrender.com";
+
 const AGE_LABELS = {
   "6m-1y": "6 أشهر - سنة",
   "1y-1.5y": "سنة - سنة ونص",
@@ -20,7 +22,6 @@ const STATUS_LABEL = {
 
 /* =================== Helpers =================== */
 
-// Phone normalize for wa.me
 function normalizeIL(phone) {
   if (!phone) return "";
   let p = phone.toString().trim().replace(/\s|-/g, "");
@@ -31,7 +32,6 @@ function normalizeIL(phone) {
   return p;
 }
 
-// Display 05.. instead of +972..
 function displayILPhone(phone) {
   if (!phone) return "";
   let p = phone.toString().trim().replace(/\s|-/g, "");
@@ -90,6 +90,12 @@ function groupBadgeClass(g) {
   return "g-other";
 }
 
+function receiptFullUrl(receiptUrl) {
+  if (!receiptUrl) return "";
+  if (/^https?:\/\//i.test(receiptUrl)) return receiptUrl;
+  return `${API_BASE}${receiptUrl}`;
+}
+
 function downloadXLSX(filename, items) {
   const rows = items.map((x) => ({
     "תאריך הרשמה": x.createdAt ? formatCreatedAtIL(x.createdAt) : "",
@@ -108,7 +114,7 @@ function downloadXLSX(filename, items) {
     "יש מחלה": x.hasDisease || "",
     "פירוט מחלה": x.diseaseDetails || "",
     הערות: x.notes || "",
-    קבלה: x.receiptUrl ? `${API_BASE}${x.receiptUrl}` : "",
+    קבלה: x.receiptUrl ? receiptFullUrl(x.receiptUrl) : "",
   }));
 
   const ws = XLSX.utils.json_to_sheet(rows);
@@ -200,25 +206,28 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        alert(data?.message || data?.error || "שגיאה בעדכון סטטוס");
+        const msg = data?.message || data?.error || "שגיאה בעדכון סטטוס";
+        alert(msg);
         return;
       }
 
       const name = x.childFullName || "";
       const phone = x.motherPhone || "";
 
-     const msgApproved =
-  `🌸 روضة الملاك الصغير\n\n` +
-  `تم قبول تسجيل الطفل/ة ${name} بنجاح ✅\n` +
-  `سنقوم بالتواصل معكم قريبًا.\n\n` +
-  `شكراً لثقتكم بنا 💛`;
+      const msgApproved =
+        `🌸 روضة الملاك الصغير\n\n` +
+        `تم قبول تسجيل الطفل/ة ${name} بنجاح ✅\n` +
+        `سنقوم بالتواصل معكم قريبًا.\n\n` +
+        `شكراً لثقتكم بنا 💛`;
 
-const msgRejected =
-  `🌸 روضة الملاك الصغير\n\n` +
-  `نأسف، لم يتم قبول تسجيل الطفل/ة ${name} حالياً.\n` +
-  `يمكنكم التواصل معنا لمزيد من التفاصيل.\n\n` +
-  `مع خالص التقدير 🌷`;
-      const link = status === "approved" ? waLink(phone, msgApproved) : status === "rejected" ? waLink(phone, msgRejected) : "";
+      const msgRejected =
+        `🌸 روضة الملاك الصغير\n\n` +
+        `نأسف، لم يتم قبول تسجيل الطفل/ة ${name} حالياً.\n` +
+        `يمكنكم التواصل معنا لمزيد من التفاصيل.\n\n` +
+        `مع خالص التقدير 🌷`;
+
+      const link =
+        status === "approved" ? waLink(phone, msgApproved) : status === "rejected" ? waLink(phone, msgRejected) : "";
 
       if (link) window.open(link, "_blank");
 
@@ -235,11 +244,11 @@ const msgRejected =
   };
 
   const sendPlaceMsgToWaiting = (x) => {
-   const msg =
-  `🌸 روضة الملاك الصغير\n\n` +
-  `أصبح هناك مكان متاح الآن في الصف.\n` +
-  `هل ما زلتم ترغبون بتسجيل الطفل/ة ${x.childFullName || ""} ؟\n\n` +
-  `الرجاء الرد نعم أو لا.`;
+    const msg =
+      `🌸 روضة الملاك الصغير\n\n` +
+      `أصبح هناك مكان متاح الآن في الصف.\n` +
+      `هل ما زلتم ترغبون بتسجيل الطفل/ة ${x.childFullName || ""} ؟\n\n` +
+      `الرجاء الرد نعم أو لا.`;
 
     const link = waLink(x.motherPhone, msg);
     if (link) window.open(link, "_blank");
@@ -286,7 +295,12 @@ const msgRejected =
     <div className="adminTableWrap">
       <div className="adminTableTools">
         <div className="toolRow">
-          <input className="adminSearch" value={q} onChange={(e) => setQ(e.target.value)} placeholder="חיפוש: שם/טלפון/כתובת..." />
+          <input
+            className="adminSearch"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="חיפוש: שם/טלפון/כתובת..."
+          />
 
           <select className="adminSelect" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             {statusOptions.map((o) => (
@@ -327,9 +341,7 @@ const msgRejected =
             <th>סטטוס</th>
             <th>שם הילד</th>
             <th>ת.לידה</th>
-
             {waitingActions ? <th>כיתה</th> : null}
-
             <th>אמא</th>
             <th>טל׳ אמא</th>
             <th>אבא</th>
@@ -373,12 +385,14 @@ const msgRejected =
                 <td>{x.fatherName || "-"}</td>
                 <td className="cellPhone">{displayILPhone(x.fatherPhone) || "-"}</td>
 
-                <td>{x.stayUntil ? <span className={`stayPill stay-${x.stayUntil}`}>{x.stayUntil}:00</span> : "-"}</td>
+                <td>
+                  {x.stayUntil ? <span className={`stayPill stay-${x.stayUntil}`}>{x.stayUntil}:00</span> : "-"}
+                </td>
 
                 {showReceipt ? (
                   <td>
                     {x.receiptUrl ? (
-                      <a className="receiptLink" href={`${API_BASE}${x.receiptUrl}`} target="_blank" rel="noreferrer">
+                      <a className="receiptLink" href={receiptFullUrl(x.receiptUrl)} target="_blank" rel="noreferrer">
                         פתח
                       </a>
                     ) : (
@@ -418,7 +432,7 @@ const msgRejected =
                           )
                         }
                       >
-                        💬 וואטסאפ
+                        💬 וואטسאפ
                       </button>
 
                       <button className="miniBtn ok" type="button" title="הוספה מהמתנה" onClick={() => addFromWaiting(x)}>
@@ -501,16 +515,14 @@ const msgRejected =
                 <div className="fieldCard">
                   <div className="fieldLabel">אמא</div>
                   <div className="fieldValue">
-                    {details.motherName || "-"}{" "}
-                    <span className="muted">({displayILPhone(details.motherPhone) || "-"})</span>
+                    {details.motherName || "-"} <span className="muted">({displayILPhone(details.motherPhone) || "-"})</span>
                   </div>
                 </div>
 
                 <div className="fieldCard">
                   <div className="fieldLabel">אבא</div>
                   <div className="fieldValue">
-                    {details.fatherName || "-"}{" "}
-                    <span className="muted">({displayILPhone(details.fatherPhone) || "-"})</span>
+                    {details.fatherName || "-"} <span className="muted">({displayILPhone(details.fatherPhone) || "-"})</span>
                   </div>
                 </div>
 
@@ -552,7 +564,7 @@ const msgRejected =
                   <div className="fieldCard wide">
                     <div className="fieldLabel">קבלה</div>
                     <div className="fieldValue">
-                      <a className="receiptLink" href={`${API_BASE}${details.receiptUrl}`} target="_blank" rel="noreferrer">
+                      <a className="receiptLink" href={receiptFullUrl(details.receiptUrl)} target="_blank" rel="noreferrer">
                         פתח קבלה
                       </a>
                     </div>
@@ -562,11 +574,7 @@ const msgRejected =
             </div>
 
             <div className="modalActions">
-              <button
-                className="modalBtn"
-                type="button"
-                onClick={() => navigator.clipboard.writeText(displayILPhone(details.motherPhone || ""))}
-              >
+              <button className="modalBtn" type="button" onClick={() => navigator.clipboard.writeText(displayILPhone(details.motherPhone || ""))}>
                 העתק טל׳ אמא
               </button>
 
@@ -776,7 +784,13 @@ export default function Admin() {
               </button>
             </div>
 
-            <AdminTable items={topItems} onRefresh={load} capMap={cap} hideWaiting={false} waitingActions={topTable === "waiting"} />
+            <AdminTable
+              items={topItems}
+              onRefresh={load}
+              capMap={cap}
+              hideWaiting={false}
+              waitingActions={topTable === "waiting"}
+            />
           </div>
         ) : null}
       </div>
