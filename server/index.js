@@ -309,7 +309,8 @@ app.get("/api/registrations/:id/receipt", async (req, res) => {
 
     res.setHeader("Content-Type", type);
     res.setHeader("Content-Disposition", "inline");
-    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Content-Length", buf.length);
 
