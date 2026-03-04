@@ -100,19 +100,27 @@ function downloadXLSX(filename, items) {
   const rows = items.map((x) => ({
     "תאריך הרשמה": x.createdAt ? formatCreatedAtIL(x.createdAt) : "",
     סטטוס: STATUS_LABEL[x.status || "new"] || (x.status || "new"),
+
     "שם הילד": x.childFullName || "",
+    "ת.ז ילד": x.childId ? `'${String(x.childId).trim()}` : "",
+
     "תאריך לידה": formatBirthDateIL(x.birthDate || ""),
     "כיתה": AGE_LABELS[x.ageGroup] || x.ageGroup || "",
+
     "שם האם": x.motherName || "",
     "טלפון אם": displayILPhone(x.motherPhone || ""),
+
     "שם האב": x.fatherName || "",
     "טלפון אב": displayILPhone(x.fatherPhone || ""),
+
     "שעת יציאה": x.stayUntil ? `${x.stayUntil}:00` : "",
     כתובת: x.address || "",
+
     "יש אלרגיה": x.hasAllergy || "",
     "פירוט אלרגיה": x.allergyDetails || "",
     "יש מחלה": x.hasDisease || "",
     "פירוט מחלה": x.diseaseDetails || "",
+
     הערות: x.notes || "",
     קבלה: x.receiptUrl ? receiptFullUrl(x.receiptUrl) : "",
   }));
@@ -342,7 +350,7 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
             <th>סטטוס</th>
             <th>שם הילד</th>
             <th>ת.לידה</th>
-            {waitingActions ? <th>כיתה</th> : null}
+            <th>כיתה</th>
             <th>אמא</th>
             <th>טל׳ אמא</th>
             <th>אבא</th>
@@ -373,14 +381,12 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
                 <td>{x.childFullName || "-"}</td>
                 <td className="cellDate">{formatBirthDateIL(x.birthDate) || "-"}</td>
 
-                {waitingActions ? (
-                  <td>
-                    <span className={`groupPill ${groupBadgeClass(x.ageGroup)}`}>
-                      {isNew ? <span className="greenDot" /> : null}
-                      {AGE_LABELS[x.ageGroup] || x.ageGroup || "-"}
-                    </span>
-                  </td>
-                ) : null}
+                <td>
+                  <span className={`groupPill ${groupBadgeClass(x.ageGroup)}`}>
+                    {st === "new" ? <span className="greenDot" /> : null}
+                    {AGE_LABELS[x.ageGroup] || x.ageGroup || "-"}
+                  </span>
+                </td>
 
                 <td>{x.motherName || "-"}</td>
                 <td className="cellPhone">{displayILPhone(x.motherPhone) || "-"}</td>
@@ -441,7 +447,6 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
                     </>
                   ) : null}
 
-                  {/* ✅ מאשר/נדחה רק ל"חדש" כדי למנוע שליחה כפולה */}
                   {st === "new" ? (
                     <>
                       <button className="miniBtn okBright" type="button" onClick={() => setStatusAndNotify(x, "approved")}>
@@ -521,16 +526,14 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
                 <div className="fieldCard">
                   <div className="fieldLabel">אמא</div>
                   <div className="fieldValue">
-                    {details.motherName || "-"}{" "}
-                    <span className="muted">({displayILPhone(details.motherPhone) || "-"})</span>
+                    {details.motherName || "-"} <span className="muted">({displayILPhone(details.motherPhone) || "-"})</span>
                   </div>
                 </div>
 
                 <div className="fieldCard">
                   <div className="fieldLabel">אבא</div>
                   <div className="fieldValue">
-                    {details.fatherName || "-"}{" "}
-                    <span className="muted">({displayILPhone(details.fatherPhone) || "-"})</span>
+                    {details.fatherName || "-"} <span className="muted">({displayILPhone(details.fatherPhone) || "-"})</span>
                   </div>
                 </div>
 

@@ -3,9 +3,15 @@ import cors from "cors";
 import multer from "multer";
 import fs from "fs";
 import path from "path";
+import mongoose from "mongoose";
+import { v2 as cloudinary } from "cloudinary";
+import Registration from "./models/Registration.js";
 
 const app = express();
 
+/* =========================
+   CORS
+========================= */
 const allowList = (process.env.CLIENT_ORIGIN || "http://localhost:5173")
   .split(",")
   .map((s) => s.trim())
@@ -27,10 +33,38 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 5050;
 
-const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data");
-const DB_FILE = path.join(DATA_DIR, "registrations.json");
-const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(process.cwd(), "uploads");
+/* =========================
+   Mongo
+========================= */
+const MONGODB_URI = process.env.MONGODB_URI;
+if (!MONGODB_URI) {
+  console.error("❌ Missing MONGODB_URI");
+  process.exit(1);
+}
+try {
+  await mongoose.connect(MONGODB_URI);
+  console.log("✅ MongoDB connected");
+} catch (e) {
+  console.error("❌ MongoDB connection error:", e.message);
+  process.exit(1);
+}
+/* =========================
+   Cloudinary (receipts)
+========================= */
+if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+  console.error("❌ Missing Cloudinary env vars");
+  process.exit(1);
+}
 
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+/* =========================
+   Constants
+========================= */
 const MAX_PER_GROUP = {
   "6m-1y": 7,
   "1y-1.5y": 20,
@@ -42,54 +76,9 @@ const AGE_GROUPS = new Set(Object.keys(MAX_PER_GROUP));
 const VALID_STAY = new Set(["14", "15", "16"]);
 const VALID_STATUS = new Set(["new", "waiting", "approved", "rejected"]);
 
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-if (!fs.existsSync(DB_FILE)) fs.writeFileSync(DB_FILE, JSON.stringify([]));
-
-const readDb = () => JSON.parse(fs.readFileSync(DB_FILE, "utf-8"));
-const writeDb = (items) => fs.writeFileSync(DB_FILE, JSON.stringify(items, null, 2));
-const makeId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
-function countOccupiedInGroup(db, ageGroup) {
-  return db.filter((x) => (x.ageGroup || "") === ageGroup && ["new", "approved"].includes(x.status || "new")).length;
-}
-
-function getCapacity(db, ageGroup) {
-  const max = MAX_PER_GROUP[ageGroup] ?? 0;
-  const current = countOccupiedInGroup(db, ageGroup);
-
-  return {
-    max,
-    current,
-    hasPlace: current < max,
-    remaining: Math.max(0, max - current),
-  };
-}
-
-function promoteWaitingIfPossible(db, ageGroup) {
-  while (true) {
-    const cap = getCapacity(db, ageGroup);
-    if (!cap.hasPlace) break;
-
-    let idx = -1;
-    for (let i = db.length - 1; i >= 0; i--) {
-      const x = db[i];
-      if ((x.ageGroup || "") === ageGroup && (x.status || "new") === "waiting") {
-        idx = i;
-        break;
-      }
-    }
-
-    if (idx === -1) break;
-
-    db[idx] = {
-      ...db[idx],
-      status: "new",
-      promotedAt: new Date().toISOString(),
-    };
-  }
-}
-
+/* =========================
+   Helpers
+========================= */
 function normalizeIL(phone) {
   if (!phone) return "";
   let p = phone.toString().trim().replace(/\s|-/g, "");
@@ -107,17 +96,52 @@ function normStr(s) {
     .replace(/\s+/g, " ");
 }
 
-function isDuplicate(db, body) {
+async function countOccupiedInGroup(ageGroup) {
+  return Registration.countDocuments({
+    ageGroup,
+    status: { $in: ["new", "approved"] },
+  });
+}
+
+async function getCapacity(ageGroup) {
+  const max = MAX_PER_GROUP[ageGroup] ?? 0;
+  const current = await countOccupiedInGroup(ageGroup);
+
+  return {
+    max,
+    current,
+    hasPlace: current < max,
+    remaining: Math.max(0, max - current),
+  };
+}
+
+async function promoteWaitingIfPossible(ageGroup) {
+  while (true) {
+    const cap = await getCapacity(ageGroup);
+    if (!cap.hasPlace) break;
+
+    const waiting = await Registration.findOne({ ageGroup, status: "waiting" }).sort({ createdAt: 1 });
+    if (!waiting) break;
+
+    waiting.status = "new";
+    waiting.promotedAt = new Date().toISOString();
+    await waiting.save();
+  }
+}
+
+async function isDuplicate(body) {
   const child = normStr(body.childFullName);
   const birthDate = (body.birthDate || "").toString().trim();
-  const childId = (body.childId || "").toString().trim(); // ✅ חדש
+  const childId = (body.childId || "").toString().trim();
 
   const motherPhone = normalizeIL(body.motherPhone);
   const fatherPhone = normalizeIL(body.fatherPhone);
 
   if (!child || !birthDate || !childId) return false;
 
-  return db.some((x) => {
+  const candidates = await Registration.find({ childId, birthDate }).lean();
+
+  return candidates.some((x) => {
     const sameChild = normStr(x.childFullName) === child;
     const sameBirth = (x.birthDate || "").toString().trim() === birthDate;
     const sameChildId = (x.childId || "").toString().trim() === childId;
@@ -129,18 +153,25 @@ function isDuplicate(db, body) {
   });
 }
 
+/* =========================
+   Multer (temporary local file only)
+========================= */
+const TMP_DIR = path.join(process.cwd(), "tmp");
+if (!fs.existsSync(TMP_DIR)) fs.mkdirSync(TMP_DIR, { recursive: true });
+
 const storage = multer.diskStorage({
-  destination: (_, __, cb) => cb(null, UPLOADS_DIR),
+  destination: (_, __, cb) => cb(null, TMP_DIR),
   filename: (_, file, cb) => {
     const name = `${Date.now()}-${Math.random().toString(16).slice(2)}${path.extname(file.originalname)}`;
     cb(null, name);
   },
 });
-
 const upload = multer({ storage });
-app.use("/uploads", express.static(UPLOADS_DIR));
 
-app.post("/api/registrations", (req, res) => {
+/* =========================
+   Routes
+========================= */
+app.post("/api/registrations", async (req, res) => {
   try {
     const body = req.body || {};
     const allowWaiting = body.allowWaiting === true;
@@ -156,16 +187,14 @@ app.post("/api/registrations", (req, res) => {
       return res.status(400).json({ error: "Invalid stayUntil" });
     }
 
-    const db = readDb();
-
-    if (isDuplicate(db, body)) {
+    if (await isDuplicate(body)) {
       return res.status(409).json({
         error: "duplicate",
         message: "❌ כבר קיימת הרשמה עבור הילד/ה עם הפרטים הללו.",
       });
     }
 
-    const cap = getCapacity(db, ageGroup);
+    const cap = await getCapacity(ageGroup);
     const full = !cap.hasPlace;
 
     if (full && !allowWaiting) {
@@ -177,11 +206,10 @@ app.post("/api/registrations", (req, res) => {
       });
     }
 
-    const item = {
-      id: makeId(),
-      createdAt: new Date().toISOString(),
+    const item = await Registration.create({
       ...body,
-      childId: String(body.childId || "").trim(), // ✅ שמירה נקייה
+      ageGroup,
+      childId: String(body.childId || "").trim(),
       motherPhone: normalizeIL(body.motherPhone),
       fatherPhone: normalizeIL(body.fatherPhone),
       status: full ? "waiting" : "new",
@@ -189,10 +217,8 @@ app.post("/api/registrations", (req, res) => {
       receiptUploadedAt: "",
       approvedNotifiedAt: "",
       rejectedNotifiedAt: "",
-    };
-
-    db.unshift(item);
-    writeDb(db);
+      promotedAt: "",
+    });
 
     res.json({
       ok: true,
@@ -204,54 +230,54 @@ app.post("/api/registrations", (req, res) => {
   }
 });
 
-app.get("/api/registrations", (_, res) => {
-  res.json(readDb());
+app.get("/api/registrations", async (_, res) => {
+  const items = await Registration.find({}).sort({ createdAt: -1 });
+  res.json(items);
 });
 
-app.get("/api/registrations/:id", (req, res) => {
+app.get("/api/registrations/:id", async (req, res) => {
   try {
-    const { id } = req.params;
-    const db = readDb();
-    const item = db.find((x) => x.id === id);
+    const item = await Registration.findById(req.params.id);
     if (!item) return res.status(404).json({ error: "Not found" });
-    return res.json({ ok: true, item });
-  } catch {
-    return res.status(500).json({ error: "Server error" });
-  }
-});
-
-app.post("/api/registrations/:id/receipt", upload.single("receipt"), (req, res) => {
-  try {
-    const { id } = req.params;
-    if (!req.file) return res.status(400).json({ error: "No file" });
-
-    const db = readDb();
-    const idx = db.findIndex((x) => x.id === id);
-    if (idx === -1) return res.status(404).json({ error: "Not found" });
-
-    db[idx] = {
-      ...db[idx],
-      receiptUrl: `/uploads/${req.file.filename}`,
-      receiptUploadedAt: new Date().toISOString(),
-    };
-
-    writeDb(db);
-    res.json({ ok: true, item: db[idx] });
+    res.json({ ok: true, item });
   } catch {
     res.status(500).json({ error: "Server error" });
   }
 });
 
-app.patch("/api/registrations/:id", (req, res) => {
+/* ✅ Receipt upload -> Cloudinary URL (never deleted on Render) */
+app.post("/api/registrations/:id/receipt", upload.single("receipt"), async (req, res) => {
   try {
     const { id } = req.params;
+    if (!req.file) return res.status(400).json({ error: "No file" });
+
+    const item = await Registration.findById(id);
+    if (!item) return res.status(404).json({ error: "Not found" });
+
+    const up = await cloudinary.uploader.upload(req.file.path, {
+      folder: "kindergarten-receipts",
+      resource_type: "image",
+    });
+
+    fs.unlink(req.file.path, () => {});
+
+    item.receiptUrl = up.secure_url;
+    item.receiptUploadedAt = new Date().toISOString();
+    await item.save();
+
+    res.json({ ok: true, item });
+  } catch {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.patch("/api/registrations/:id", async (req, res) => {
+  try {
     const body = req.body || {};
+    const id = req.params.id;
 
-    const db = readDb();
-    const idx = db.findIndex((x) => x.id === id);
-    if (idx === -1) return res.status(404).json({ error: "Not found" });
-
-    const current = db[idx];
+    const current = await Registration.findById(id);
+    if (!current) return res.status(404).json({ error: "Not found" });
 
     const nextStatus = body.status !== undefined ? String(body.status) : undefined;
     const nextAgeGroup = body.ageGroup !== undefined ? String(body.ageGroup).trim() : undefined;
@@ -264,76 +290,67 @@ app.patch("/api/registrations/:id", (req, res) => {
     }
 
     if (nextStatus === "approved" && current.approvedNotifiedAt) {
-      return res.status(409).json({
-        error: "already_notified",
-        message: "כבר נשלחה הודעת 'מאושר' עבור ההרשמה הזו.",
-      });
+      return res.status(409).json({ error: "already_notified", message: "כבר נשלחה הודעת 'מאושר' עבור ההרשמה הזו." });
     }
     if (nextStatus === "rejected" && current.rejectedNotifiedAt) {
-      return res.status(409).json({
-        error: "already_notified",
-        message: "כבר נשלחה הודעת 'נדחה' עבור ההרשמה הזו.",
-      });
+      return res.status(409).json({ error: "already_notified", message: "כבר נשלחה הודעת 'נדחה' עבור ההרשמה הזו." });
     }
+
+    const prevStatus = current.status || "new";
+    const prevAgeGroup = current.ageGroup;
+
+    Object.assign(current, body);
+
+    if (body.motherPhone !== undefined) current.motherPhone = normalizeIL(body.motherPhone);
+    if (body.fatherPhone !== undefined) current.fatherPhone = normalizeIL(body.fatherPhone);
 
     const nowIso = new Date().toISOString();
+    if (nextStatus === "approved" && !current.approvedNotifiedAt) current.approvedNotifiedAt = nowIso;
+    if (nextStatus === "rejected" && !current.rejectedNotifiedAt) current.rejectedNotifiedAt = nowIso;
 
-    const updated = {
-      ...current,
-      ...body,
-    };
+    await current.save();
 
-    if (body.motherPhone !== undefined) updated.motherPhone = normalizeIL(body.motherPhone);
-    if (body.fatherPhone !== undefined) updated.fatherPhone = normalizeIL(body.fatherPhone);
-
-    if (nextStatus === "approved" && !current.approvedNotifiedAt) {
-      updated.approvedNotifiedAt = nowIso;
-    }
-    if (nextStatus === "rejected" && !current.rejectedNotifiedAt) {
-      updated.rejectedNotifiedAt = nowIso;
+    if (nextStatus === "rejected" && ["new", "approved"].includes(prevStatus)) {
+      await promoteWaitingIfPossible(prevAgeGroup);
     }
 
-    db[idx] = updated;
-    writeDb(db);
-
-    if (nextStatus === "rejected" && ["new", "approved"].includes(current.status || "new")) {
-      promoteWaitingIfPossible(db, current.ageGroup);
-      writeDb(db);
-    }
-
-    res.json({ ok: true, item: db[idx] });
+    res.json({ ok: true, item: current });
   } catch {
     res.status(500).json({ error: "Server error" });
   }
 });
 
-app.delete("/api/registrations/:id", (req, res) => {
-  const { id } = req.params;
+app.delete("/api/registrations/:id", async (req, res) => {
+  try {
+    const item = await Registration.findById(req.params.id);
+    if (!item) return res.status(404).json({ error: "Not found" });
 
-  const db = readDb();
-  const item = db.find((x) => x.id === id);
-  if (!item) return res.status(404).json({ error: "Not found" });
+    const ageGroup = item.ageGroup;
+    const prevStatus = item.status || "new";
 
-  const after = db.filter((x) => x.id !== id);
-  writeDb(after);
+    await item.deleteOne();
 
-  promoteWaitingIfPossible(after, item.ageGroup);
-  writeDb(after);
+    if (["new", "approved"].includes(prevStatus)) {
+      await promoteWaitingIfPossible(ageGroup);
+    }
 
-  res.json({ ok: true });
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
-app.get("/api/capacity", (_, res) => {
-  const db = readDb();
+app.get("/api/capacity", async (_, res) => {
   const groups = {};
-
   for (const g of AGE_GROUPS) {
-    groups[g] = getCapacity(db, g);
+    groups[g] = await getCapacity(g);
   }
-
   res.json({ ok: true, groups });
 });
 
+app.get("/", (_, res) => {
+  res.send("OK");
+});
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
