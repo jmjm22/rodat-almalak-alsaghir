@@ -9,8 +9,7 @@ function calcAgeGroupFromBirthDate(birthDate) {
   if (Number.isNaN(bd.getTime())) return "";
 
   const today = new Date();
-  let months =
-    (today.getFullYear() - bd.getFullYear()) * 12 + (today.getMonth() - bd.getMonth());
+  let months = (today.getFullYear() - bd.getFullYear()) * 12 + (today.getMonth() - bd.getMonth());
 
   if (today.getDate() < bd.getDate()) months -= 1;
   if (months < 0) return "";
@@ -35,6 +34,7 @@ export default function RegistrationForm() {
   const initialForm = {
     childFullName: "",
     birthDate: "",
+    childId: "", // ✅ חדש
     ageGroup: "",
     motherName: "",
     motherPhone: "",
@@ -105,6 +105,7 @@ export default function RegistrationForm() {
 
   const childRef = useRef(null);
   const birthRef = useRef(null);
+  const childIdRef = useRef(null); // ✅ חדש
   const motherRef = useRef(null);
   const motherPhoneRef = useRef(null);
   const fatherRef = useRef(null);
@@ -114,12 +115,8 @@ export default function RegistrationForm() {
     const value = e.target.value;
 
     setForm((p) => {
-      if (key === "hasAllergy" && value === "no")
-        return { ...p, hasAllergy: value, allergyDetails: "" };
-
-      if (key === "hasDisease" && value === "no")
-        return { ...p, hasDisease: value, diseaseDetails: "" };
-
+      if (key === "hasAllergy" && value === "no") return { ...p, hasAllergy: value, allergyDetails: "" };
+      if (key === "hasDisease" && value === "no") return { ...p, hasDisease: value, diseaseDetails: "" };
       return { ...p, [key]: value };
     });
   };
@@ -135,6 +132,7 @@ export default function RegistrationForm() {
 
     if (!has(f.childFullName)) return false;
     if (!has(f.birthDate)) return false;
+    if (!has(f.childId)) return false; // ✅ חדש
     if (!has(f.ageGroup)) return false;
     if (!has(f.motherName)) return false;
     if (!has(f.motherPhone)) return false;
@@ -169,6 +167,9 @@ export default function RegistrationForm() {
     if (need(has(f.childFullName), "⚠️ الرجاء إدخال اسم الطفل/ة", childRef)) return;
     if (need(has(f.birthDate), "⚠️ الرجاء إدخال تاريخ ميلاد الطفل/ة", birthRef)) return;
 
+    // ✅ חדש: ת"ז ילד
+    if (need(has(f.childId), "⚠️ الرجاء إدخال رقم هوية الطفل/ة", childIdRef)) return;
+
     const safeAgeGroup = calcAgeGroupFromBirthDate(f.birthDate);
     if (need(has(safeAgeGroup), "⚠️ تاريخ الميلاد غير مناسب. الرجاء اختيار تاريخ صحيح.", birthRef)) return;
 
@@ -189,7 +190,7 @@ export default function RegistrationForm() {
     setLoading(true);
 
     try {
-      const payloadToSend = { ...f, ageGroup: safeAgeGroup };
+      const payloadToSend = { ...f, ageGroup: safeAgeGroup, childId: String(f.childId || "").trim() };
 
       const res = await fetch(`${API_BASE}/api/registrations`, {
         method: "POST",
@@ -282,13 +283,37 @@ export default function RegistrationForm() {
         <form className="k-form" onSubmit={submit}>
           <div className="k-sectionTitle">معلومات الطفل/ة</div>
 
-          <label className="k-label"><Req /> اسم الطفل/ة</label>
+          <label className="k-label">
+            <Req /> اسم الطفل/ة
+          </label>
           <input ref={childRef} className="k-input" value={form.childFullName} onChange={onChange("childFullName")} />
 
-          <label className="k-label"><Req /> تاريخ ميلاد الطفل/ة</label>
+          <label className="k-label">
+            <Req /> تاريخ ميلاد الطفل/ة
+          </label>
           <input ref={birthRef} type="date" className="k-input k-date" value={form.birthDate} onChange={onChange("birthDate")} />
 
-          <label className="k-label"><Req /> عمر الطفل/ة</label>
+          {/* ✅ חדש: ת"ז מתחת לתאריך */}
+          <label className="k-label">
+            <Req /> رقم هوية الطفل/ة
+          </label>
+          <input
+            ref={childIdRef}
+            className="k-input"
+            inputMode="numeric"
+            value={form.childId}
+            onChange={(e) =>
+              setForm((p) => ({
+                ...p,
+                childId: e.target.value.replace(/\D/g, "").slice(0, 9),
+              }))
+            }
+            placeholder="مثال: 123456789"
+          />
+
+          <label className="k-label">
+            <Req /> عمر الطفل/ة
+          </label>
           <div className="k-input k-readonly" aria-readonly="true">
             {form.ageGroup ? ageGroupLabel(form.ageGroup) : "اختروا تاريخ الميلاد أولاً"}
           </div>
@@ -297,29 +322,39 @@ export default function RegistrationForm() {
 
           <div className="k-grid2">
             <div>
-              <label className="k-label"><Req /> اسم الأم</label>
+              <label className="k-label">
+                <Req /> اسم الأم
+              </label>
               <input ref={motherRef} className="k-input" value={form.motherName} onChange={onChange("motherName")} />
             </div>
 
             <div>
-              <label className="k-label"><Req /> هاتف الأم</label>
+              <label className="k-label">
+                <Req /> هاتف الأم
+              </label>
               <input ref={motherPhoneRef} className="k-input" value={form.motherPhone} onChange={onChange("motherPhone")} />
             </div>
 
             <div>
-              <label className="k-label"><Req /> اسم الأب</label>
+              <label className="k-label">
+                <Req /> اسم الأب
+              </label>
               <input ref={fatherRef} className="k-input" value={form.fatherName} onChange={onChange("fatherName")} />
             </div>
 
             <div>
-              <label className="k-label"><Req /> هاتف الأب</label>
+              <label className="k-label">
+                <Req /> هاتف الأب
+              </label>
               <input ref={fatherPhoneRef} className="k-input" value={form.fatherPhone} onChange={onChange("fatherPhone")} />
             </div>
           </div>
 
           <div className="k-sectionTitle">تفاصيل إضافية</div>
 
-          <label className="k-label"><Req /> حتى أي ساعة؟</label>
+          <label className="k-label">
+            <Req /> حتى أي ساعة؟
+          </label>
           <div className="k-radioRow">
             <label className="k-radio">
               <input type="radio" name="stayUntil" value="14" checked={form.stayUntil === "14"} onChange={onChange("stayUntil")} />
@@ -338,7 +373,9 @@ export default function RegistrationForm() {
           <label className="k-label">العنوان (اختياري)</label>
           <input className="k-input" value={form.address} onChange={onChange("address")} />
 
-          <label className="k-label"><Req /> هل لدى الطفل/ة أي نوع من الحساسية؟</label>
+          <label className="k-label">
+            <Req /> هل لدى الطفل/ة أي نوع من الحساسية؟
+          </label>
           <div className="k-radioRow">
             <label className="k-radio">
               <input type="radio" name="hasAllergy" value="no" checked={form.hasAllergy === "no"} onChange={onChange("hasAllergy")} />
@@ -352,12 +389,16 @@ export default function RegistrationForm() {
 
           {form.hasAllergy === "yes" && (
             <>
-              <label className="k-label"><Req /> من ماذا؟</label>
+              <label className="k-label">
+                <Req /> من ماذا؟
+              </label>
               <input className="k-input" value={form.allergyDetails} onChange={onChange("allergyDetails")} />
             </>
           )}
 
-          <label className="k-label"><Req /> هل لدى الطفل/ة حالة صحية يجب أن نكون على علم بها؟</label>
+          <label className="k-label">
+            <Req /> هل لدى الطفل/ة حالة صحية يجب أن نكون على علم بها؟
+          </label>
           <div className="k-radioRow">
             <label className="k-radio">
               <input type="radio" name="hasDisease" value="no" checked={form.hasDisease === "no"} onChange={onChange("hasDisease")} />
@@ -371,7 +412,9 @@ export default function RegistrationForm() {
 
           {form.hasDisease === "yes" && (
             <>
-              <label className="k-label"><Req /> ما هو المرض؟</label>
+              <label className="k-label">
+                <Req /> ما هو المرض؟
+              </label>
               <input className="k-input" value={form.diseaseDetails} onChange={onChange("diseaseDetails")} />
             </>
           )}

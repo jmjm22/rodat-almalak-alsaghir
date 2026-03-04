@@ -177,6 +177,7 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
         x.address,
         String(x.stayUntil || ""),
         AGE_LABELS[x.ageGroup] || x.ageGroup || "",
+        String(x.childId || ""), // ✅ אפשר לחפש גם לפי ת"ז
       ]
         .filter(Boolean)
         .join(" ")
@@ -299,7 +300,7 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
             className="adminSearch"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="חיפוש: שם/טלפון/כתובת..."
+            placeholder="חיפוש: שם/טלפון/כתובת/ת.ז..."
           />
 
           <select className="adminSelect" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
@@ -432,7 +433,7 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
                           )
                         }
                       >
-                        💬 וואטسאפ
+                        💬 וואטסאפ
                       </button>
 
                       <button className="miniBtn ok" type="button" title="הוספה מהמתנה" onClick={() => addFromWaiting(x)}>
@@ -510,6 +511,12 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
                 <div className="fieldCard">
                   <div className="fieldLabel">תאריך לידה</div>
                   <div className="fieldValue">{formatBirthDateIL(details.birthDate) || "-"}</div>
+                </div>
+
+                {/* ✅ חדש: ת"ז ילד */}
+                <div className="fieldCard">
+                  <div className="fieldLabel">ת.ז ילד</div>
+                  <div className="fieldValue">{details.childId || "-"}</div>
                 </div>
 
                 <div className="fieldCard">

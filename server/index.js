@@ -51,9 +51,7 @@ const writeDb = (items) => fs.writeFileSync(DB_FILE, JSON.stringify(items, null,
 const makeId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 function countOccupiedInGroup(db, ageGroup) {
-  return db.filter(
-    (x) => (x.ageGroup || "") === ageGroup && ["new", "approved"].includes(x.status || "new")
-  ).length;
+  return db.filter((x) => (x.ageGroup || "") === ageGroup && ["new", "approved"].includes(x.status || "new")).length;
 }
 
 function getCapacity(db, ageGroup) {
@@ -112,28 +110,29 @@ function normStr(s) {
 function isDuplicate(db, body) {
   const child = normStr(body.childFullName);
   const birthDate = (body.birthDate || "").toString().trim();
+  const childId = (body.childId || "").toString().trim(); // ✅ חדש
+
   const motherPhone = normalizeIL(body.motherPhone);
   const fatherPhone = normalizeIL(body.fatherPhone);
 
-  if (!child || !birthDate) return false;
+  if (!child || !birthDate || !childId) return false;
 
   return db.some((x) => {
     const sameChild = normStr(x.childFullName) === child;
     const sameBirth = (x.birthDate || "").toString().trim() === birthDate;
+    const sameChildId = (x.childId || "").toString().trim() === childId;
 
     const sameMother = normalizeIL(x.motherPhone) && normalizeIL(x.motherPhone) === motherPhone;
     const sameFather = normalizeIL(x.fatherPhone) && normalizeIL(x.fatherPhone) === fatherPhone;
 
-    return sameChild && sameBirth && (sameMother || sameFather);
+    return sameChild && sameBirth && sameChildId && (sameMother || sameFather);
   });
 }
 
 const storage = multer.diskStorage({
   destination: (_, __, cb) => cb(null, UPLOADS_DIR),
   filename: (_, file, cb) => {
-    const name = `${Date.now()}-${Math.random().toString(16).slice(2)}${path.extname(
-      file.originalname
-    )}`;
+    const name = `${Date.now()}-${Math.random().toString(16).slice(2)}${path.extname(file.originalname)}`;
     cb(null, name);
   },
 });
@@ -148,6 +147,10 @@ app.post("/api/registrations", (req, res) => {
     const ageGroup = (body.ageGroup || "").trim();
 
     if (!AGE_GROUPS.has(ageGroup)) return res.status(400).json({ error: "Invalid ageGroup" });
+
+    if (!String(body.childId || "").trim()) {
+      return res.status(400).json({ error: "Missing childId", message: "חסר ת.ז ילד" });
+    }
 
     if (body.stayUntil && !VALID_STAY.has(String(body.stayUntil))) {
       return res.status(400).json({ error: "Invalid stayUntil" });
@@ -178,6 +181,7 @@ app.post("/api/registrations", (req, res) => {
       id: makeId(),
       createdAt: new Date().toISOString(),
       ...body,
+      childId: String(body.childId || "").trim(), // ✅ שמירה נקייה
       motherPhone: normalizeIL(body.motherPhone),
       fatherPhone: normalizeIL(body.fatherPhone),
       status: full ? "waiting" : "new",
