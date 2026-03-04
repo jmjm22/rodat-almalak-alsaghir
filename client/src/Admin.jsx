@@ -632,31 +632,41 @@ function AdminTable({
                   <div className="fieldValue">{details.childFullName || "-"}</div>
                 </div>
 
-                <div className="fieldCard">
-                  <div className="fieldLabel">תאריך לידה</div>
-                  <div className="fieldValue">{formatBirthDateIL(details.birthDate) || "-"}</div>
-                </div>
+           <div className="fieldCard">
+  <div className="fieldLabel">תאריך לידה</div>
+  <div className="fieldValue">
+    <span className="ltr">
+      {formatBirthDateIL(details.birthDate) || "-"}
+    </span>
+  </div>
+</div>
 
-                <div className="fieldCard">
-                  <div className="fieldLabel">ת.ז ילד</div>
-                  <div className="fieldValue">{details.childId || "-"}</div>
-                </div>
+<div className="fieldCard">
+  <div className="fieldLabel">ת.ז ילד</div>
+  <div className="fieldValue">
+    <span className="ltr">{details.childId || "-"}</span>
+  </div>
+</div>
 
-                <div className="fieldCard">
-                  <div className="fieldLabel">אמא</div>
-                  <div className="fieldValue">
-                    {details.motherName || "-"}{" "}
-                    <span className="muted">({displayILPhone(details.motherPhone) || "-"})</span>
-                  </div>
-                </div>
+<div className="fieldCard">
+  <div className="fieldLabel">אמא</div>
+  <div className="fieldValue">
+    {details.motherName || "-"}{" "}
+    <span className="muted">
+      (<span className="ltr">{displayILPhone(details.motherPhone) || "-"}</span>)
+    </span>
+  </div>
+</div>
 
-                <div className="fieldCard">
-                  <div className="fieldLabel">אבא</div>
-                  <div className="fieldValue">
-                    {details.fatherName || "-"}{" "}
-                    <span className="muted">({displayILPhone(details.fatherPhone) || "-"})</span>
-                  </div>
-                </div>
+<div className="fieldCard">
+  <div className="fieldLabel">אבא</div>
+  <div className="fieldValue">
+    {details.fatherName || "-"}{" "}
+    <span className="muted">
+      (<span className="ltr">{displayILPhone(details.fatherPhone) || "-"}</span>)
+    </span>
+  </div>
+</div>
 
                 <div className="fieldCard wide">
                   <div className="fieldLabel">כתובת</div>
