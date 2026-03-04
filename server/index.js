@@ -77,6 +77,7 @@ function toClient(x) {
   if (!x) return x;
   const obj = x.toObject ? x.toObject() : x;
   const id = String(obj._id || obj.id || "");
+
   const receiptMeta = obj.receipt
     ? {
         contentType: obj.receipt.contentType,
@@ -86,7 +87,13 @@ function toClient(x) {
     : null;
 
   const { _id, __v, receipt, ...rest } = obj;
-  return { id, ...rest, receipt: receiptMeta };
+
+  return {
+    id,
+    ...rest,
+    receipt: receiptMeta,
+    hasReceipt: !!obj.receipt?.data, // ✅ עוזר באדמין
+  };
 }
 
 async function countOccupiedInGroup(ageGroup) {
@@ -99,7 +106,12 @@ async function countOccupiedInGroup(ageGroup) {
 async function getCapacity(ageGroup) {
   const max = MAX_PER_GROUP[ageGroup] ?? 0;
   const current = await countOccupiedInGroup(ageGroup);
-  return { max, current, hasPlace: current < max, remaining: Math.max(0, max - current) };
+  return {
+    max,
+    current,
+    hasPlace: current < max,
+    remaining: Math.max(0, max - current),
+  };
 }
 
 async function promoteWaitingIfPossible(ageGroup) {
@@ -223,6 +235,10 @@ app.post("/api/registrations/:id/receipt", upload.single("receipt"), async (req,
   try {
     if (!req.file) return res.status(400).json({ error: "No file", message: "לא נבחר קובץ" });
 
+    if (!req.file.mimetype?.startsWith("image/")) {
+      return res.status(400).json({ error: "bad_type", message: "יש להעלות תמונה בלבד" });
+    }
+
     const item = await Registration.findById(req.params.id);
     if (!item) return res.status(404).json({ error: "Not found" });
 
@@ -244,15 +260,23 @@ app.post("/api/registrations/:id/receipt", upload.single("receipt"), async (req,
   }
 });
 
-/* ✅ View receipt */
+/* ✅ View receipt (FIXED HEADERS) */
 app.get("/api/registrations/:id/receipt", async (req, res) => {
   try {
-    const item = await Registration.findById(req.params.id).lean();
+    const item = await Registration.findById(req.params.id).select("receipt").lean();
     if (!item?.receipt?.data) return res.status(404).send("No receipt");
 
-    res.setHeader("Content-Type", item.receipt.contentType || "application/octet-stream");
+    const buf = item.receipt.data;
+    const type = item.receipt.contentType || "image/jpeg";
+
+    res.setHeader("Content-Type", type);
+    res.setHeader("Content-Disposition", "inline");
+    res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Cache-Control", "no-store");
-    res.send(item.receipt.data);
+    res.setHeader("Accept-Ranges", "bytes");
+    res.setHeader("Content-Length", buf.length);
+
+    return res.send(buf);
   } catch {
     res.status(500).send("Server error");
   }

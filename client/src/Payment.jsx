@@ -173,10 +173,10 @@ export default function Payment() {
   };
 
   const openReceipt = () => {
-    if (!lastReceiptUrl) return;
-    const url = /^https?:\/\//i.test(lastReceiptUrl) ? lastReceiptUrl : `${API_BASE}${lastReceiptUrl}`;
-    window.open(url, "_blank");
-  };
+  const id = serverRegId || regIdFromUrl;
+  if (!id) return;
+  window.open(`${API_BASE}/api/registrations/${encodeURIComponent(id)}/receipt`, "_blank");
+};
 
   return (
     <div className="page" dir="rtl" lang="ar">

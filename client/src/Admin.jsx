@@ -484,17 +484,17 @@ function AdminTable({
 
                 {showReceipt ? (
                   <td>
-                    {x.receipt ? (
-                      <button
-                        className="receiptLink"
-                        type="button"
-                        onClick={() => openReceipt(x)}
-                      >
-                        פתח
-                      </button>
-                    ) : (
-                      "-"
-                    )}
+                   {x.hasReceipt ? (
+  <button
+    className="receiptLink"
+    type="button"
+    onClick={() => openReceipt(x)}
+  >
+    פתח
+  </button>
+) : (
+  "-"
+)}
                   </td>
                 ) : null}
 
@@ -770,41 +770,48 @@ function AdminTable({
       ) : null}
 
       {/* ✅ Receipt Modal (same tab) */}
-      {receiptView ? (
-        <Portal>
-          <div className="modalOverlay" onClick={() => setReceiptView(null)}>
-            <div className="receiptModal" onClick={(e) => e.stopPropagation()}>
-              <div className="receiptHeader">
-                <h3>קבלה</h3>
-                <div className="receiptHeaderBtns">
-                  <button
-                    className="receiptMini"
-                    type="button"
-                    onClick={() => {
-                      window.location.href = receiptView;
-                    }}
-                  >
-                    פתח בדף
-                  </button>
-                  <button
-                    className="modalClose"
-                    type="button"
-                    onClick={() => setReceiptView(null)}
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
+    {receiptView ? (
+  <Portal>
+    <div className="modalOverlay" onClick={() => setReceiptView(null)}>
+      <div className="receiptModal" onClick={(e) => e.stopPropagation()}>
+        
+        <div className="receiptHeader">
+          <h3>קבלה</h3>
 
-              <iframe
-                src={receiptView}
-                title="receipt"
-                className="receiptFrame"
-              />
-            </div>
+          <div className="receiptHeaderBtns">
+            <button
+              className="receiptMini"
+              type="button"
+              onClick={() => {
+                window.open(receiptView, "_blank");
+              }}
+            >
+              פתח בדף
+            </button>
+
+            <button
+              className="modalClose"
+              type="button"
+              onClick={() => setReceiptView(null)}
+            >
+              ✕
+            </button>
           </div>
-        </Portal>
-      ) : null}
+        </div>
+
+        {/* כאן מציגים את התמונה */}
+        <div className="receiptBody">
+          <img
+            src={receiptView}
+            alt="receipt"
+            className="receiptImage"
+          />
+        </div>
+
+      </div>
+    </div>
+  </Portal>
+) : null}
     </div>
   );
 }
