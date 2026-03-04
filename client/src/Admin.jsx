@@ -101,7 +101,7 @@ function receiptLinkById(id) {
 function downloadXLSX(filename, items) {
   const rows = items.map((x) => {
     const id = getRowId(x);
-    const receiptLink = x.receipt && id ? receiptLinkById(id) : "";
+    const receiptLink = x.hasReceipt && id ? receiptLinkById(id) : "";
 
     return {
       "תאריך הרשמה": x.createdAt ? formatCreatedAtIL(x.createdAt) : "",
@@ -169,8 +169,7 @@ function AdminTable({
   const [q, setQ] = useState("");
   const [details, setDetails] = useState(null);
 
-  // ✅ Receipt viewer (blob) - works for image/pdf
-  const [receiptView, setReceiptView] = useState(null); // { url, type }
+  const [receiptView, setReceiptView] = useState(null);
 
   const showReceipt = !waitingActions;
 
@@ -429,7 +428,6 @@ function AdminTable({
         </div>
       </div>
 
-
       <table className="adminTable">
         <thead>
           <tr>
@@ -473,9 +471,7 @@ function AdminTable({
                 </td>
 
                 <td>{x.childFullName || "-"}</td>
-                <td className="cellDate">
-                  {formatBirthDateIL(x.birthDate) || "-"}
-                </td>
+                <td className="cellDate">{formatBirthDateIL(x.birthDate) || "-"}</td>
 
                 <td>
                   <span className={`groupPill ${groupBadgeClass(x.ageGroup)}`}>
@@ -485,14 +481,10 @@ function AdminTable({
                 </td>
 
                 <td>{x.motherName || "-"}</td>
-                <td className="cellPhone">
-                  {displayILPhone(x.motherPhone) || "-"}
-                </td>
+                <td className="cellPhone">{displayILPhone(x.motherPhone) || "-"}</td>
 
                 <td>{x.fatherName || "-"}</td>
-                <td className="cellPhone">
-                  {displayILPhone(x.fatherPhone) || "-"}
-                </td>
+                <td className="cellPhone">{displayILPhone(x.fatherPhone) || "-"}</td>
 
                 <td>
                   {x.stayUntil ? (
@@ -506,7 +498,7 @@ function AdminTable({
 
                 {showReceipt ? (
                   <td>
-                    {x.receipt ? (
+                    {x.hasReceipt ? (
                       <button
                         className="receiptLink"
                         type="button"
@@ -521,11 +513,7 @@ function AdminTable({
                 ) : null}
 
                 <td className="actionsCell">
-                  <button
-                    className="miniBtn"
-                    type="button"
-                    onClick={() => setDetails(x)}
-                  >
+                  <button className="miniBtn" type="button" onClick={() => setDetails(x)}>
                     פרטים
                   </button>
 
@@ -535,11 +523,7 @@ function AdminTable({
                         className="miniBtn ok"
                         type="button"
                         disabled={!hasPlace}
-                        title={
-                          hasPlace
-                            ? "שליחת הודעה לאמא"
-                            : "אין מקום בקבוצה כרגע"
-                        }
+                        title={hasPlace ? "שליחת הודעה לאמא" : "אין מקום בקבוצה כרגע"}
                         onClick={() => sendPlaceMsgToWaiting(x)}
                       >
                         🟢 התפנה מקום
@@ -596,11 +580,7 @@ function AdminTable({
                     </>
                   ) : null}
 
-                  <button
-                    className="miniBtn danger"
-                    type="button"
-                    onClick={() => del(x)}
-                  >
+                  <button className="miniBtn danger" type="button" onClick={() => del(x)}>
                     מחיקה
                   </button>
                 </td>
@@ -610,9 +590,7 @@ function AdminTable({
         </tbody>
       </table>
 
-      {!filtered.length ? (
-        <div className="adminEmpty">אין תוצאות לפי הסינון.</div>
-      ) : null}
+      {!filtered.length ? <div className="adminEmpty">אין תוצאות לפי הסינון.</div> : null}
 
       {/* Details Modal */}
       {details ? (
@@ -621,22 +599,15 @@ function AdminTable({
             <div className="modalHeader">
               <div className="modalTitle">
                 <h3>פרטי הרשמה</h3>
-                <small>
-                  {details.createdAt ? formatCreatedAtIL(details.createdAt) : ""}
-                </small>
+                <small>{details.createdAt ? formatCreatedAtIL(details.createdAt) : ""}</small>
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span className={`statusPill s-${details.status || "new"}`}>
-                  {STATUS_LABEL[details.status || "new"] ||
-                    (details.status || "new")}
+                  {STATUS_LABEL[details.status || "new"] || (details.status || "new")}
                 </span>
 
-                <button
-                  className="modalClose"
-                  type="button"
-                  onClick={() => setDetails(null)}
-                >
+                <button className="modalClose" type="button" onClick={() => setDetails(null)}>
                   ✕
                 </button>
               </div>
@@ -663,9 +634,7 @@ function AdminTable({
 
                 <div className="fieldCard">
                   <div className="fieldLabel">תאריך לידה</div>
-                  <div className="fieldValue">
-                    {formatBirthDateIL(details.birthDate) || "-"}
-                  </div>
+                  <div className="fieldValue">{formatBirthDateIL(details.birthDate) || "-"}</div>
                 </div>
 
                 <div className="fieldCard">
@@ -677,9 +646,7 @@ function AdminTable({
                   <div className="fieldLabel">אמא</div>
                   <div className="fieldValue">
                     {details.motherName || "-"}{" "}
-                    <span className="muted">
-                      ({displayILPhone(details.motherPhone) || "-"})
-                    </span>
+                    <span className="muted">({displayILPhone(details.motherPhone) || "-"})</span>
                   </div>
                 </div>
 
@@ -687,9 +654,7 @@ function AdminTable({
                   <div className="fieldLabel">אבא</div>
                   <div className="fieldValue">
                     {details.fatherName || "-"}{" "}
-                    <span className="muted">
-                      ({displayILPhone(details.fatherPhone) || "-"})
-                    </span>
+                    <span className="muted">({displayILPhone(details.fatherPhone) || "-"})</span>
                   </div>
                 </div>
 
@@ -727,15 +692,11 @@ function AdminTable({
                   <div className="fieldValue">{details.notes || "-"}</div>
                 </div>
 
-                {details.receipt ? (
+                {details.hasReceipt ? (
                   <div className="fieldCard wide">
                     <div className="fieldLabel">קבלה</div>
                     <div className="fieldValue">
-                      <button
-                        className="receiptLink"
-                        type="button"
-                        onClick={() => openReceipt(details)}
-                      >
+                      <button className="receiptLink" type="button" onClick={() => openReceipt(details)}>
                         פתח קבלה
                       </button>
                     </div>
@@ -748,11 +709,7 @@ function AdminTable({
               <button
                 className="modalBtn"
                 type="button"
-                onClick={() =>
-                  navigator.clipboard.writeText(
-                    displayILPhone(details.motherPhone || "")
-                  )
-                }
+                onClick={() => navigator.clipboard.writeText(displayILPhone(details.motherPhone || ""))}
               >
                 העתק טל׳ אמא
               </button>
@@ -762,10 +719,7 @@ function AdminTable({
                 type="button"
                 onClick={() =>
                   window.open(
-                    waLink(
-                      details.motherPhone,
-                      `שלום, לגבי ההרשמה של ${details.childFullName || ""}`
-                    ),
+                    waLink(details.motherPhone, `שלום, לגבי ההרשמה של ${details.childFullName || ""}`),
                     "_blank"
                   )
                 }
@@ -773,11 +727,7 @@ function AdminTable({
                 וואטסאפ לאמא
               </button>
 
-              <button
-                className="modalBtn primary"
-                type="button"
-                onClick={() => setDetails(null)}
-              >
+              <button className="modalBtn primary" type="button" onClick={() => setDetails(null)}>
                 סגור
               </button>
             </div>
@@ -785,7 +735,7 @@ function AdminTable({
         </div>
       ) : null}
 
-      {/* Receipt Modal (same page) */}
+      {/* Receipt Modal */}
       {receiptView ? (
         <div className="modalOverlay" onClick={closeReceipt}>
           <div className="receiptModal" onClick={(e) => e.stopPropagation()}>
@@ -793,19 +743,11 @@ function AdminTable({
               <h3>קבלה</h3>
 
               <div className="receiptHeaderBtns">
-                <button
-                  className="receiptMini"
-                  type="button"
-                  onClick={() => window.open(receiptView.url, "_blank")}
-                >
+                <button className="receiptMini" type="button" onClick={() => window.open(receiptView.url, "_blank")}>
                   פתח בדף
                 </button>
 
-                <button
-                  className="modalClose"
-                  type="button"
-                  onClick={closeReceipt}
-                >
+                <button className="modalClose" type="button" onClick={closeReceipt}>
                   ✕
                 </button>
               </div>
@@ -813,17 +755,9 @@ function AdminTable({
 
             <div className="receiptBody">
               {receiptView.type.includes("pdf") ? (
-                <iframe
-                  className="receiptFrame"
-                  src={receiptView.url}
-                  title="receipt"
-                />
+                <iframe className="receiptFrame" src={receiptView.url} title="receipt" />
               ) : (
-                <img
-                  className="receiptImage"
-                  src={receiptView.url}
-                  alt="receipt"
-                />
+                <img className="receiptImage" src={receiptView.url} alt="receipt" />
               )}
             </div>
           </div>
@@ -836,9 +770,7 @@ function AdminTable({
 /* =================== Group Card =================== */
 
 function GroupCard({ title, items, onRefresh, isOpen, onToggle }) {
-  const occupied = items.filter((x) =>
-    ["new", "approved"].includes(x.status || "new")
-  ).length;
+  const occupied = items.filter((x) => ["new", "approved"].includes(x.status || "new")).length;
   const rejected = items.filter((x) => (x.status || "new") === "rejected").length;
   const hasNew = items.some((x) => (x.status || "new") === "new");
 
@@ -879,12 +811,7 @@ function GroupCard({ title, items, onRefresh, isOpen, onToggle }) {
       </button>
 
       <div className="groupBody">
-        <AdminTable
-          items={items}
-          onRefresh={onRefresh}
-          hideWaiting={true}
-          waitingActions={false}
-        />
+        <AdminTable items={items} onRefresh={onRefresh} hideWaiting={true} waitingActions={false} />
       </div>
     </div>
   );
@@ -966,10 +893,7 @@ export default function Admin() {
   }, [items]);
 
   const downloadAll = () => {
-    downloadXLSX(
-      `registrations-${new Date().toISOString().slice(0, 10)}.xlsx`,
-      items
-    );
+    downloadXLSX(`registrations-${new Date().toISOString().slice(0, 10)}.xlsx`, items);
   };
 
   const newTotal = items.filter((x) => (x.status || "new") === "new").length;

@@ -253,7 +253,7 @@ app.get("/api/registrations/:id", async (req, res) => {
   }
 });
 
-/* ✅ Upload receipt -> MongoDB (with id validation + logs) */
+/* ✅ Upload receipt -> MongoDB (image/pdf) */
 app.post("/api/registrations/:id/receipt", upload.single("receipt"), async (req, res) => {
   try {
     const { id } = req.params;
@@ -264,8 +264,12 @@ app.post("/api/registrations/:id/receipt", upload.single("receipt"), async (req,
 
     if (!req.file) return res.status(400).json({ error: "No file", message: "לא נבחר קובץ" });
 
-    if (!req.file.mimetype?.startsWith("image/")) {
-      return res.status(400).json({ error: "bad_type", message: "יש להעלות תמונה בלבד" });
+    const mt = req.file.mimetype || "";
+    const isImage = mt.startsWith("image/");
+    const isPdf = mt === "application/pdf";
+
+    if (!isImage && !isPdf) {
+      return res.status(400).json({ error: "bad_type", message: "יש להעלות תמונה או PDF בלבד" });
     }
 
     const item = await Registration.findById(id);
@@ -273,7 +277,7 @@ app.post("/api/registrations/:id/receipt", upload.single("receipt"), async (req,
 
     item.receipt = {
       data: req.file.buffer,
-      contentType: req.file.mimetype,
+      contentType: mt,
       filename: req.file.originalname,
       uploadedAt: new Date().toISOString(),
     };
@@ -284,15 +288,16 @@ app.post("/api/registrations/:id/receipt", upload.single("receipt"), async (req,
     console.error("❌ receipt upload error:", e);
     const msg = e?.message || "";
     if (msg.includes("File too large")) {
-      return res
-        .status(413)
-        .json({ error: "file_too_large", message: "הקובץ גדול מדי (מקסימום 5MB)" });
+      return res.status(413).json({
+        error: "file_too_large",
+        message: "הקובץ גדול מדי (מקסימום 5MB)",
+      });
     }
     return res.status(500).json({ error: "Server error" });
   }
 });
 
-/* ✅ View receipt (id validation + correct headers) */
+/* ✅ View receipt (image/pdf) */
 app.get("/api/registrations/:id/receipt", async (req, res) => {
   try {
     const { id } = req.params;
@@ -301,16 +306,14 @@ app.get("/api/registrations/:id/receipt", async (req, res) => {
       return res.status(400).send("Invalid id");
     }
 
-    const item = await Registration.findById(id).select("receipt").lean();
+    const item = await Registration.findById(id).select("receipt");
     if (!item?.receipt?.data) return res.status(404).send("No receipt");
 
     const buf = item.receipt.data;
-    const type = item.receipt.contentType || "image/jpeg";
+    const type = item.receipt.contentType || "application/octet-stream";
 
     res.setHeader("Content-Type", type);
     res.setHeader("Content-Disposition", "inline");
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Content-Length", buf.length);
 
