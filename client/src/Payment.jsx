@@ -4,6 +4,8 @@ import "./App.css";
 const API_BASE = import.meta.env.VITE_API_BASE || "https://rodat-almalak-alsaghir.onrender.com";
 const DEPOSIT_AMOUNT = 300;
 
+const getRowId = (x) => x?._id || x?.id || "";
+
 export default function Payment() {
   const BANK_OWNER = "روضة الملاك الصغير";
   const BANK_NAME = "בנק  פועלים";
@@ -11,8 +13,9 @@ export default function Payment() {
   const BANK_ACCOUNT = "354681";
 
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
-  const regId = (params.get("id") || "").trim();
+  const regIdFromUrl = (params.get("id") || "").trim();
 
+  const [serverRegId, setServerRegId] = useState(""); // ✅ id אמיתי מהשרת
   const [regExists, setRegExists] = useState(false);
   const [checkingReg, setCheckingReg] = useState(true);
 
@@ -20,6 +23,7 @@ export default function Payment() {
   const [receiptError, setReceiptError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const [lastReceiptUrl, setLastReceiptUrl] = useState(""); // ✅ אם Cloudinary מחזיר URL
   const [popup, setPopup] = useState({ open: false, type: "success", text: "" });
   const openPopup = (type, text) => setPopup({ open: true, type, text });
   const closePopup = () => setPopup((p) => ({ ...p, open: false }));
@@ -27,8 +31,10 @@ export default function Payment() {
   useEffect(() => {
     const checkRegistration = async () => {
       setCheckingReg(true);
+      setLastReceiptUrl("");
+      setServerRegId("");
 
-      if (!regId) {
+      if (!regIdFromUrl) {
         setRegExists(false);
         setCheckingReg(false);
         openPopup("error", "❌ رقم التسجيل غير موجود. ارجعوا لصفحة التسجيل.");
@@ -36,13 +42,24 @@ export default function Payment() {
       }
 
       try {
-        const res = await fetch(`${API_BASE}/api/registrations/${encodeURIComponent(regId)}`);
+        const res = await fetch(`${API_BASE}/api/registrations/${encodeURIComponent(regIdFromUrl)}`);
+        const data = await res.json().catch(() => null);
+
         if (!res.ok) {
           setRegExists(false);
           openPopup("error", "❌ لم يتم العثور على هذا التسجيل. الرجاء إعادة التسجيل.");
           return;
         }
+
+        // ✅ השרת שלך מחזיר { ok:true, item }
+        const item = data?.item || data;
+        const realId = getRowId(item) || regIdFromUrl;
+
+        setServerRegId(realId);
         setRegExists(true);
+
+        // אם כבר יש קבלה קיימת
+        if (item?.receiptUrl) setLastReceiptUrl(item.receiptUrl);
       } catch {
         setRegExists(false);
         openPopup("error", "❌ تعذر الاتصال بالخادم.");
@@ -52,7 +69,7 @@ export default function Payment() {
     };
 
     checkRegistration();
-  }, [regId]);
+  }, [regIdFromUrl]);
 
   const copyBankDetails = async () => {
     const text =
@@ -62,7 +79,7 @@ export default function Payment() {
       `الفرع: ${BANK_BRANCH}\n` +
       `رقم الحساب: ${BANK_ACCOUNT}\n` +
       `ملاحظة التحويل: اسم الطفل + هاتف الأم\n` +
-      `رقم التسجيل: ${regId || "—"}\n`;
+      `رقم التسجيل: ${serverRegId || regIdFromUrl || "—"}\n`;
 
     try {
       await navigator.clipboard.writeText(text);
@@ -98,8 +115,8 @@ export default function Payment() {
   };
 
   const canSend = useMemo(() => {
-    return !!regId && regExists && !!receiptFile && !loading && !checkingReg;
-  }, [regId, regExists, receiptFile, loading, checkingReg]);
+    return !!(serverRegId || regIdFromUrl) && regExists && !!receiptFile && !loading && !checkingReg;
+  }, [serverRegId, regIdFromUrl, regExists, receiptFile, loading, checkingReg]);
 
   const sendReceipt = async () => {
     setReceiptError("");
@@ -119,12 +136,14 @@ export default function Payment() {
       return;
     }
 
+    const idToUse = serverRegId || regIdFromUrl;
+
     setLoading(true);
     try {
       const fd = new FormData();
       fd.append("receipt", receiptFile);
 
-      const res = await fetch(`${API_BASE}/api/registrations/${encodeURIComponent(regId)}/receipt`, {
+      const res = await fetch(`${API_BASE}/api/registrations/${encodeURIComponent(idToUse)}/receipt`, {
         method: "POST",
         body: fd,
       });
@@ -135,6 +154,10 @@ export default function Payment() {
         openPopup("error", data?.message || "❌ حدث خطأ أثناء إرسال الإيصال. حاولوا مرة أخرى.");
         return;
       }
+
+      // ✅ אם השרת מחזיר item עם receiptUrl
+      const item = data?.item || null;
+      if (item?.receiptUrl) setLastReceiptUrl(item.receiptUrl);
 
       openPopup("success", "✅ تم إرسال إثبات التحويل بنجاح! شكراً لكم 💛");
       setReceiptFile(null);
@@ -147,6 +170,12 @@ export default function Payment() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const openReceipt = () => {
+    if (!lastReceiptUrl) return;
+    const url = /^https?:\/\//i.test(lastReceiptUrl) ? lastReceiptUrl : `${API_BASE}${lastReceiptUrl}`;
+    window.open(url, "_blank");
   };
 
   return (
@@ -207,6 +236,12 @@ export default function Payment() {
           <button className="k-button" type="button" disabled={!canSend} onClick={sendReceipt}>
             {loading ? "جاري الإرسال..." : "إرسال إثبات التحويل"}
           </button>
+
+          {lastReceiptUrl ? (
+            <button type="button" className="adminBtn" style={{ width: "100%", marginTop: 10 }} onClick={openReceipt}>
+              فتح الإيصال الذي تم رفعه
+            </button>
+          ) : null}
 
           <button
             type="button"

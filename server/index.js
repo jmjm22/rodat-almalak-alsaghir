@@ -1,10 +1,7 @@
 import express from "express";
 import cors from "cors";
 import multer from "multer";
-import fs from "fs";
-import path from "path";
 import mongoose from "mongoose";
-import { v2 as cloudinary } from "cloudinary";
 import Registration from "./models/Registration.js";
 
 const app = express();
@@ -41,26 +38,6 @@ if (!MONGODB_URI) {
   console.error("❌ Missing MONGODB_URI");
   process.exit(1);
 }
-try {
-  await mongoose.connect(MONGODB_URI);
-  console.log("✅ MongoDB connected");
-} catch (e) {
-  console.error("❌ MongoDB connection error:", e.message);
-  process.exit(1);
-}
-/* =========================
-   Cloudinary (receipts)
-========================= */
-if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
-  console.error("❌ Missing Cloudinary env vars");
-  process.exit(1);
-}
-
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
 
 /* =========================
    Constants
@@ -96,6 +73,22 @@ function normStr(s) {
     .replace(/\s+/g, " ");
 }
 
+function toClient(x) {
+  if (!x) return x;
+  const obj = x.toObject ? x.toObject() : x;
+  const id = String(obj._id || obj.id || "");
+  const receiptMeta = obj.receipt
+    ? {
+        contentType: obj.receipt.contentType,
+        filename: obj.receipt.filename,
+        uploadedAt: obj.receipt.uploadedAt,
+      }
+    : null;
+
+  const { _id, __v, receipt, ...rest } = obj;
+  return { id, ...rest, receipt: receiptMeta };
+}
+
 async function countOccupiedInGroup(ageGroup) {
   return Registration.countDocuments({
     ageGroup,
@@ -106,13 +99,7 @@ async function countOccupiedInGroup(ageGroup) {
 async function getCapacity(ageGroup) {
   const max = MAX_PER_GROUP[ageGroup] ?? 0;
   const current = await countOccupiedInGroup(ageGroup);
-
-  return {
-    max,
-    current,
-    hasPlace: current < max,
-    remaining: Math.max(0, max - current),
-  };
+  return { max, current, hasPlace: current < max, remaining: Math.max(0, max - current) };
 }
 
 async function promoteWaitingIfPossible(ageGroup) {
@@ -154,23 +141,17 @@ async function isDuplicate(body) {
 }
 
 /* =========================
-   Multer (temporary local file only)
+   Multer (Memory) ✅
 ========================= */
-const TMP_DIR = path.join(process.cwd(), "tmp");
-if (!fs.existsSync(TMP_DIR)) fs.mkdirSync(TMP_DIR, { recursive: true });
-
-const storage = multer.diskStorage({
-  destination: (_, __, cb) => cb(null, TMP_DIR),
-  filename: (_, file, cb) => {
-    const name = `${Date.now()}-${Math.random().toString(16).slice(2)}${path.extname(file.originalname)}`;
-    cb(null, name);
-  },
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
 });
-const upload = multer({ storage });
 
 /* =========================
    Routes
 ========================= */
+
 app.post("/api/registrations", async (req, res) => {
   try {
     const body = req.body || {};
@@ -188,10 +169,7 @@ app.post("/api/registrations", async (req, res) => {
     }
 
     if (await isDuplicate(body)) {
-      return res.status(409).json({
-        error: "duplicate",
-        message: "❌ כבר קיימת הרשמה עבור הילד/ה עם הפרטים הללו.",
-      });
+      return res.status(409).json({ error: "duplicate", message: "❌ כבר קיימת הרשמה עבור הילד/ה עם הפרטים הללו." });
     }
 
     const cap = await getCapacity(ageGroup);
@@ -213,18 +191,13 @@ app.post("/api/registrations", async (req, res) => {
       motherPhone: normalizeIL(body.motherPhone),
       fatherPhone: normalizeIL(body.fatherPhone),
       status: full ? "waiting" : "new",
-      receiptUrl: "",
-      receiptUploadedAt: "",
       approvedNotifiedAt: "",
       rejectedNotifiedAt: "",
       promotedAt: "",
+      receipt: null,
     });
 
-    res.json({
-      ok: true,
-      item,
-      message: full ? "נכנסתם לרשימת המתנה." : "ההרשמה נקלטה בהצלחה.",
-    });
+    res.json({ ok: true, item: toClient(item), message: full ? "נכנסתם לרשימת המתנה." : "ההרשמה נקלטה בהצלחה." });
   } catch {
     res.status(500).json({ error: "Server error" });
   }
@@ -232,42 +205,56 @@ app.post("/api/registrations", async (req, res) => {
 
 app.get("/api/registrations", async (_, res) => {
   const items = await Registration.find({}).sort({ createdAt: -1 });
-  res.json(items);
+  res.json(items.map(toClient));
 });
 
 app.get("/api/registrations/:id", async (req, res) => {
   try {
     const item = await Registration.findById(req.params.id);
     if (!item) return res.status(404).json({ error: "Not found" });
-    res.json({ ok: true, item });
+    res.json({ ok: true, item: toClient(item) });
   } catch {
     res.status(500).json({ error: "Server error" });
   }
 });
 
-/* ✅ Receipt upload -> Cloudinary URL (never deleted on Render) */
+/* ✅ Upload receipt -> MongoDB */
 app.post("/api/registrations/:id/receipt", upload.single("receipt"), async (req, res) => {
   try {
-    const { id } = req.params;
-    if (!req.file) return res.status(400).json({ error: "No file" });
+    if (!req.file) return res.status(400).json({ error: "No file", message: "לא נבחר קובץ" });
 
-    const item = await Registration.findById(id);
+    const item = await Registration.findById(req.params.id);
     if (!item) return res.status(404).json({ error: "Not found" });
 
-    const up = await cloudinary.uploader.upload(req.file.path, {
-      folder: "kindergarten-receipts",
-      resource_type: "image",
-    });
+    item.receipt = {
+      data: req.file.buffer,
+      contentType: req.file.mimetype,
+      filename: req.file.originalname,
+      uploadedAt: new Date().toISOString(),
+    };
 
-    fs.unlink(req.file.path, () => {});
-
-    item.receiptUrl = up.secure_url;
-    item.receiptUploadedAt = new Date().toISOString();
     await item.save();
-
-    res.json({ ok: true, item });
-  } catch {
+    res.json({ ok: true, item: toClient(item) });
+  } catch (e) {
+    const msg = e?.message || "";
+    if (msg.includes("File too large")) {
+      return res.status(413).json({ error: "file_too_large", message: "הקובץ גדול מדי (מקסימום 5MB)" });
+    }
     res.status(500).json({ error: "Server error" });
+  }
+});
+
+/* ✅ View receipt */
+app.get("/api/registrations/:id/receipt", async (req, res) => {
+  try {
+    const item = await Registration.findById(req.params.id).lean();
+    if (!item?.receipt?.data) return res.status(404).send("No receipt");
+
+    res.setHeader("Content-Type", item.receipt.contentType || "application/octet-stream");
+    res.setHeader("Cache-Control", "no-store");
+    res.send(item.receipt.data);
+  } catch {
+    res.status(500).send("Server error");
   }
 });
 
@@ -282,12 +269,8 @@ app.patch("/api/registrations/:id", async (req, res) => {
     const nextStatus = body.status !== undefined ? String(body.status) : undefined;
     const nextAgeGroup = body.ageGroup !== undefined ? String(body.ageGroup).trim() : undefined;
 
-    if (nextStatus !== undefined && !VALID_STATUS.has(nextStatus)) {
-      return res.status(400).json({ error: "Invalid status" });
-    }
-    if (nextAgeGroup !== undefined && nextAgeGroup && !AGE_GROUPS.has(nextAgeGroup)) {
-      return res.status(400).json({ error: "Invalid ageGroup" });
-    }
+    if (nextStatus !== undefined && !VALID_STATUS.has(nextStatus)) return res.status(400).json({ error: "Invalid status" });
+    if (nextAgeGroup !== undefined && nextAgeGroup && !AGE_GROUPS.has(nextAgeGroup)) return res.status(400).json({ error: "Invalid ageGroup" });
 
     if (nextStatus === "approved" && current.approvedNotifiedAt) {
       return res.status(409).json({ error: "already_notified", message: "כבר נשלחה הודעת 'מאושר' עבור ההרשמה הזו." });
@@ -314,7 +297,7 @@ app.patch("/api/registrations/:id", async (req, res) => {
       await promoteWaitingIfPossible(prevAgeGroup);
     }
 
-    res.json({ ok: true, item: current });
+    res.json({ ok: true, item: toClient(current) });
   } catch {
     res.status(500).json({ error: "Server error" });
   }
@@ -348,9 +331,16 @@ app.get("/api/capacity", async (_, res) => {
   res.json({ ok: true, groups });
 });
 
-app.get("/", (_, res) => {
-  res.send("OK");
-});
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+/* =========================
+   Start server AFTER Mongo ✅
+========================= */
+mongoose
+  .connect(MONGODB_URI)
+  .then(() => {
+    console.log("✅ MongoDB connected");
+    app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+  })
+  .catch((e) => {
+    console.error("❌ MongoDB connection error:", e?.message || e);
+    process.exit(1);
+  });

@@ -1,50 +1,45 @@
 import mongoose from "mongoose";
 
-const registrationSchema = new mongoose.Schema(
-{
-childFullName: String,
-birthDate: String,
-ageGroup: String,
-
-childId: String,
-
-motherName: String,
-motherPhone: String,
-
-fatherName: String,
-fatherPhone: String,
-
-stayUntil: String,
-address: String,
-
-hasAllergy: String,
-allergyDetails: String,
-
-hasDisease: String,
-diseaseDetails: String,
-
-notes: String,
-
-status: { type: String, default: "new" },
-
-receiptUrl: String,
-receiptUploadedAt: String,
-
-approvedNotifiedAt: String,
-rejectedNotifiedAt: String,
-
-promotedAt: String,
-},
-{ timestamps: true }
+const ReceiptSchema = new mongoose.Schema(
+  {
+    data: Buffer,
+    contentType: String,
+    filename: String,
+    uploadedAt: String,
+  },
+  { _id: false }
 );
 
-registrationSchema.set("toJSON", {
-transform: (_, ret) => {
-ret.id = ret._id.toString();
-delete ret._id;
-delete ret.__v;
-return ret;
-},
-});
+const RegistrationSchema = new mongoose.Schema(
+  {
+    childFullName: String,
+    birthDate: String,
+    childId: String,
+    ageGroup: String,
 
-export default mongoose.model("Registration", registrationSchema);
+    motherName: String,
+    motherPhone: String,
+    fatherName: String,
+    fatherPhone: String,
+
+    stayUntil: String,
+    address: String,
+
+    hasAllergy: String,
+    allergyDetails: String,
+    hasDisease: String,
+    diseaseDetails: String,
+    notes: String,
+
+    status: { type: String, default: "new" },
+
+    approvedNotifiedAt: String,
+    rejectedNotifiedAt: String,
+    promotedAt: String,
+
+    receipt: { type: ReceiptSchema, default: null },
+  },
+  { timestamps: true }
+);
+
+export default mongoose.model("Registration", RegistrationSchema);

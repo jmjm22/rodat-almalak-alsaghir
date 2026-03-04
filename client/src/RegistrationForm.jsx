@@ -34,7 +34,7 @@ export default function RegistrationForm() {
   const initialForm = {
     childFullName: "",
     birthDate: "",
-    childId: "", // ✅ חדש
+    childId: "",
     ageGroup: "",
     motherName: "",
     motherPhone: "",
@@ -105,7 +105,7 @@ export default function RegistrationForm() {
 
   const childRef = useRef(null);
   const birthRef = useRef(null);
-  const childIdRef = useRef(null); // ✅ חדש
+  const childIdRef = useRef(null);
   const motherRef = useRef(null);
   const motherPhoneRef = useRef(null);
   const fatherRef = useRef(null);
@@ -132,7 +132,7 @@ export default function RegistrationForm() {
 
     if (!has(f.childFullName)) return false;
     if (!has(f.birthDate)) return false;
-    if (!has(f.childId)) return false; // ✅ חדש
+    if (!has(f.childId)) return false;
     if (!has(f.ageGroup)) return false;
     if (!has(f.motherName)) return false;
     if (!has(f.motherPhone)) return false;
@@ -166,8 +166,6 @@ export default function RegistrationForm() {
 
     if (need(has(f.childFullName), "⚠️ الرجاء إدخال اسم الطفل/ة", childRef)) return;
     if (need(has(f.birthDate), "⚠️ الرجاء إدخال تاريخ ميلاد الطفل/ة", birthRef)) return;
-
-    // ✅ חדש: ת"ז ילד
     if (need(has(f.childId), "⚠️ الرجاء إدخال رقم هوية الطفل/ة", childIdRef)) return;
 
     const safeAgeGroup = calcAgeGroupFromBirthDate(f.birthDate);
@@ -245,7 +243,8 @@ export default function RegistrationForm() {
         return;
       }
 
-      const id = payload?.item?.id;
+      // ✅ חשוב למונגו: לוקחים _id (וגם fallback ל-id)
+      const id = payload?.item?._id || payload?.item?.id || "";
       const status = payload?.item?.status;
 
       if (status === "waiting") {
@@ -254,6 +253,7 @@ export default function RegistrationForm() {
       }
 
       openAlert("success", "✅ تم التسجيل بنجاح! سيتم تحويلكم الآن لصفحة دفع العربون.");
+
       setTimeout(() => {
         window.location.href = `/payment?id=${encodeURIComponent(id)}`;
       }, 900);
@@ -293,7 +293,6 @@ export default function RegistrationForm() {
           </label>
           <input ref={birthRef} type="date" className="k-input k-date" value={form.birthDate} onChange={onChange("birthDate")} />
 
-          {/* ✅ חדש: ת"ז מתחת לתאריך */}
           <label className="k-label">
             <Req /> رقم هوية الطفل/ة
           </label>

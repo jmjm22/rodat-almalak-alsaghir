@@ -22,6 +22,8 @@ const STATUS_LABEL = {
 
 /* =================== Helpers =================== */
 
+const getRowId = (x) => x?.id || x?._id || "";
+
 function normalizeIL(phone) {
   if (!phone) return "";
   let p = phone.toString().trim().replace(/\s|-/g, "");
@@ -90,40 +92,51 @@ function groupBadgeClass(g) {
   return "g-other";
 }
 
-function receiptFullUrl(receiptUrl) {
-  if (!receiptUrl) return "";
-  if (/^https?:\/\//i.test(receiptUrl)) return receiptUrl;
-  return `${API_BASE}${receiptUrl}`;
+function receiptLinkById(id) {
+  if (!id) return "";
+  return `${API_BASE}/api/registrations/${encodeURIComponent(id)}/receipt`;
+}
+
+// ✅ קבלה נשמרת ב-Mongo -> פותחים דרך ה-API
+function openReceipt(x) {
+  const id = getRowId(x);
+  if (!id) return;
+  window.open(receiptLinkById(id), "_blank");
 }
 
 function downloadXLSX(filename, items) {
-  const rows = items.map((x) => ({
-    "תאריך הרשמה": x.createdAt ? formatCreatedAtIL(x.createdAt) : "",
-    סטטוס: STATUS_LABEL[x.status || "new"] || (x.status || "new"),
+  const rows = items.map((x) => {
+    const id = getRowId(x);
+    const receiptLink = x.receipt && id ? receiptLinkById(id) : "";
 
-    "שם הילד": x.childFullName || "",
-    "ת.ז ילד": x.childId ? `'${String(x.childId).trim()}` : "",
+    return {
+      "תאריך הרשמה": x.createdAt ? formatCreatedAtIL(x.createdAt) : "",
+      סטטוס: STATUS_LABEL[x.status || "new"] || (x.status || "new"),
 
-    "תאריך לידה": formatBirthDateIL(x.birthDate || ""),
-    "כיתה": AGE_LABELS[x.ageGroup] || x.ageGroup || "",
+      "שם הילד": x.childFullName || "",
+      "ת.ז ילד": x.childId ? `'${String(x.childId).trim()}` : "",
 
-    "שם האם": x.motherName || "",
-    "טלפון אם": displayILPhone(x.motherPhone || ""),
+      "תאריך לידה": formatBirthDateIL(x.birthDate || ""),
+      "כיתה": AGE_LABELS[x.ageGroup] || x.ageGroup || "",
 
-    "שם האב": x.fatherName || "",
-    "טלפון אב": displayILPhone(x.fatherPhone || ""),
+      "שם האם": x.motherName || "",
+      "טלפון אם": displayILPhone(x.motherPhone || ""),
 
-    "שעת יציאה": x.stayUntil ? `${x.stayUntil}:00` : "",
-    כתובת: x.address || "",
+      "שם האב": x.fatherName || "",
+      "טלפון אב": displayILPhone(x.fatherPhone || ""),
 
-    "יש אלרגיה": x.hasAllergy || "",
-    "פירוט אלרגיה": x.allergyDetails || "",
-    "יש מחלה": x.hasDisease || "",
-    "פירוט מחלה": x.diseaseDetails || "",
+      "שעת יציאה": x.stayUntil ? `${x.stayUntil}:00` : "",
+      כתובת: x.address || "",
 
-    הערות: x.notes || "",
-    קבלה: x.receiptUrl ? receiptFullUrl(x.receiptUrl) : "",
-  }));
+      "יש אלרגיה": x.hasAllergy || "",
+      "פירוט אלרגיה": x.allergyDetails || "",
+      "יש מחלה": x.hasDisease || "",
+      "פירוט מחלה": x.diseaseDetails || "",
+
+      הערות: x.notes || "",
+      קבלה: receiptLink,
+    };
+  });
 
   const ws = XLSX.utils.json_to_sheet(rows);
   ws["!rightToLeft"] = true;
@@ -206,7 +219,8 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
 
   const setStatusAndNotify = async (x, status) => {
     try {
-      const res = await fetch(`${API_BASE}/api/registrations/${x.id}`, {
+      const id = getRowId(x);
+      const res = await fetch(`${API_BASE}/api/registrations/${encodeURIComponent(id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
@@ -246,9 +260,11 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
     }
   };
 
-  const del = async (id) => {
+  const del = async (x) => {
+    const id = getRowId(x);
+    if (!id) return;
     if (!window.confirm("בטוחה למחוק?")) return;
-    await fetch(`${API_BASE}/api/registrations/${id}`, { method: "DELETE" });
+    await fetch(`${API_BASE}/api/registrations/${encodeURIComponent(id)}`, { method: "DELETE" });
     onRefresh();
   };
 
@@ -265,7 +281,8 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
 
   const addFromWaiting = async (x) => {
     try {
-      const res = await fetch(`${API_BASE}/api/registrations/${x.id}`, {
+      const id = getRowId(x);
+      const res = await fetch(`${API_BASE}/api/registrations/${encodeURIComponent(id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "new" }),
@@ -304,12 +321,7 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
     <div className="adminTableWrap">
       <div className="adminTableTools">
         <div className="toolRow">
-          <input
-            className="adminSearch"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="חיפוש: שם/טלפון/כתובת/ת.ז..."
-          />
+          <input className="adminSearch" value={q} onChange={(e) => setQ(e.target.value)} placeholder="חיפוש: שם/טלפון/כתובת/ת.ז..." />
 
           <select className="adminSelect" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             {statusOptions.map((o) => (
@@ -333,11 +345,7 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
             <option value="stay">מיון: שעה (14 לפני 16)</option>
           </select>
 
-          <button
-            className="adminBtn small"
-            type="button"
-            onClick={() => downloadXLSX(`registrations-${new Date().toISOString().slice(0, 10)}.xlsx`, filtered)}
-          >
+          <button className="adminBtn small" type="button" onClick={() => downloadXLSX(`registrations-${new Date().toISOString().slice(0, 10)}.xlsx`, filtered)}>
             הורדה (Excel)
           </button>
         </div>
@@ -370,8 +378,10 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
             const rowCap = capMap && x.ageGroup ? capMap[x.ageGroup] : null;
             const hasPlace = rowCap ? !!rowCap.hasPlace : true;
 
+            const rowId = getRowId(x);
+
             return (
-              <tr key={x.id} className={isNew ? "rowNew" : isWaiting ? "rowWaiting" : ""}>
+              <tr key={rowId} className={isNew ? "rowNew" : isWaiting ? "rowWaiting" : ""}>
                 <td>{x.createdAt ? formatCreatedAtIL(x.createdAt) : "-"}</td>
 
                 <td>
@@ -397,10 +407,10 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
 
                 {showReceipt ? (
                   <td>
-                    {x.receiptUrl ? (
-                      <a className="receiptLink" href={receiptFullUrl(x.receiptUrl)} target="_blank" rel="noreferrer">
+                    {x.receipt ? (
+                      <button className="receiptLink" type="button" onClick={() => openReceipt(x)}>
                         פתח
-                      </a>
+                      </button>
                     ) : (
                       "-"
                     )}
@@ -414,13 +424,7 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
 
                   {waitingActions && isWaiting ? (
                     <>
-                      <button
-                        className="miniBtn ok"
-                        type="button"
-                        disabled={!hasPlace}
-                        title={hasPlace ? "שליחת הודעה לאמא" : "אין מקום בקבוצה כרגע"}
-                        onClick={() => sendPlaceMsgToWaiting(x)}
-                      >
+                      <button className="miniBtn ok" type="button" disabled={!hasPlace} title={hasPlace ? "שליחת הודעה לאמא" : "אין מקום בקבוצה כרגע"} onClick={() => sendPlaceMsgToWaiting(x)}>
                         🟢 התפנה מקום
                       </button>
 
@@ -428,15 +432,7 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
                         className="miniBtn"
                         type="button"
                         title="וואטסאפ לאמא"
-                        onClick={() =>
-                          window.open(
-                            waLink(
-                              x.motherPhone,
-                              `🌸 روضة الملاك الصغير\n\nأصبح هناك مكان متاح الآن.\nهل ما زلتم ترغبون بتسجيل الطفل ${x.childFullName || ""} ؟`
-                            ),
-                            "_blank"
-                          )
-                        }
+                        onClick={() => window.open(waLink(x.motherPhone, `🌸 روضة الملاك الصغير\n\nأصبح هناك مكان متاح الآن.\nهل ما زلتم ترغبون بتسجيل الطفل ${x.childFullName || ""} ؟`), "_blank")}
                       >
                         💬 וואטסאפ
                       </button>
@@ -466,7 +462,7 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
                     </>
                   ) : null}
 
-                  <button className="miniBtn danger" type="button" onClick={() => del(x.id)}>
+                  <button className="miniBtn danger" type="button" onClick={() => del(x)}>
                     מחיקה
                   </button>
                 </td>
@@ -488,9 +484,7 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span className={`statusPill s-${details.status || "new"}`}>
-                  {STATUS_LABEL[details.status || "new"] || (details.status || "new")}
-                </span>
+                <span className={`statusPill s-${details.status || "new"}`}>{STATUS_LABEL[details.status || "new"] || (details.status || "new")}</span>
 
                 <button className="modalClose" type="button" onClick={() => setDetails(null)}>
                   ✕
@@ -500,9 +494,7 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
 
             <div className="modalBody">
               <div className="chipsRow">
-                <span className={`chip ${groupBadgeClass(details.ageGroup)}`}>
-                  {AGE_LABELS[details.ageGroup] || details.ageGroup || "-"}
-                </span>
+                <span className={`chip ${groupBadgeClass(details.ageGroup)}`}>{AGE_LABELS[details.ageGroup] || details.ageGroup || "-"}</span>
                 <span className="chip pink">עד שעה: {details.stayUntil ? `${details.stayUntil}:00` : "-"}</span>
                 <span className="chip green">טל׳ אמא: {displayILPhone(details.motherPhone) || "-"}</span>
               </div>
@@ -545,11 +537,7 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
                 <div className="fieldCard">
                   <div className="fieldLabel">אלרגיה</div>
                   <div className="fieldValue">
-                    {String(details.hasAllergy || "").toLowerCase() === "yes" ? (
-                      <span className="valuePill ok">כן</span>
-                    ) : (
-                      <span className="valuePill no">לא</span>
-                    )}{" "}
+                    {String(details.hasAllergy || "").toLowerCase() === "yes" ? <span className="valuePill ok">כן</span> : <span className="valuePill no">לא</span>}{" "}
                     {details.allergyDetails ? `— ${details.allergyDetails}` : ""}
                   </div>
                 </div>
@@ -557,11 +545,7 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
                 <div className="fieldCard">
                   <div className="fieldLabel">מחלה</div>
                   <div className="fieldValue">
-                    {String(details.hasDisease || "").toLowerCase() === "yes" ? (
-                      <span className="valuePill warn">כן</span>
-                    ) : (
-                      <span className="valuePill no">לא</span>
-                    )}{" "}
+                    {String(details.hasDisease || "").toLowerCase() === "yes" ? <span className="valuePill warn">כן</span> : <span className="valuePill no">לא</span>}{" "}
                     {details.diseaseDetails ? `— ${details.diseaseDetails}` : ""}
                   </div>
                 </div>
@@ -571,13 +555,13 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
                   <div className="fieldValue">{details.notes || "-"}</div>
                 </div>
 
-                {details.receiptUrl ? (
+                {details.receipt ? (
                   <div className="fieldCard wide">
                     <div className="fieldLabel">קבלה</div>
                     <div className="fieldValue">
-                      <a className="receiptLink" href={receiptFullUrl(details.receiptUrl)} target="_blank" rel="noreferrer">
+                      <button className="receiptLink" type="button" onClick={() => openReceipt(details)}>
                         פתח קבלה
-                      </a>
+                      </button>
                     </div>
                   </div>
                 ) : null}
@@ -585,19 +569,11 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
             </div>
 
             <div className="modalActions">
-              <button
-                className="modalBtn"
-                type="button"
-                onClick={() => navigator.clipboard.writeText(displayILPhone(details.motherPhone || ""))}
-              >
+              <button className="modalBtn" type="button" onClick={() => navigator.clipboard.writeText(displayILPhone(details.motherPhone || ""))}>
                 העתק טל׳ אמא
               </button>
 
-              <button
-                className="modalBtn"
-                type="button"
-                onClick={() => window.open(waLink(details.motherPhone, `שלום, לגבי ההרשמה של ${details.childFullName || ""}`), "_blank")}
-              >
+              <button className="modalBtn" type="button" onClick={() => window.open(waLink(details.motherPhone, `שלום, לגבי ההרשמה של ${details.childFullName || ""}`), "_blank")}>
                 וואטסאפ לאמא
               </button>
 
