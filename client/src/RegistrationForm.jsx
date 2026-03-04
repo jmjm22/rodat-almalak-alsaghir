@@ -1,7 +1,37 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 
 const API_BASE = "https://rodat-almalak-alsaghir.onrender.com";
+
+// ✅ calculate ageGroup from birthDate (YYYY-MM-DD)
+function calcAgeGroupFromBirthDate(birthDate) {
+  if (!birthDate) return "";
+  const bd = new Date(birthDate);
+  if (Number.isNaN(bd.getTime())) return "";
+
+  const today = new Date();
+  let months =
+    (today.getFullYear() - bd.getFullYear()) * 12 + (today.getMonth() - bd.getMonth());
+
+  if (today.getDate() < bd.getDate()) months -= 1;
+  if (months < 0) return "";
+
+  if (months >= 6 && months <= 11) return "6m-1y";
+  if (months >= 12 && months <= 17) return "1y-1.5y";
+  if (months >= 18 && months <= 23) return "1.5y-2y";
+  if (months >= 24 && months <= 35) return "2y-3y";
+
+  return "";
+}
+
+function ageGroupLabel(g) {
+  if (g === "6m-1y") return "6 أشهر - سنة";
+  if (g === "1y-1.5y") return "سنة - سنة ونص";
+  if (g === "1.5y-2y") return "سنة ونص - سنتين";
+  if (g === "2y-3y") return "سنتين - ثلاث";
+  return "";
+}
+
 export default function RegistrationForm() {
   const initialForm = {
     childFullName: "",
@@ -76,7 +106,6 @@ export default function RegistrationForm() {
 
   const childRef = useRef(null);
   const birthRef = useRef(null);
-  const ageRef = useRef(null);
   const motherRef = useRef(null);
   const motherPhoneRef = useRef(null);
   const fatherRef = useRef(null);
@@ -95,6 +124,12 @@ export default function RegistrationForm() {
       return { ...p, [key]: value };
     });
   };
+
+  // ✅ auto-set ageGroup from birthDate (prevents Invalid ageGroup)
+  useEffect(() => {
+    const g = calcAgeGroupFromBirthDate(form.birthDate);
+    setForm((p) => ({ ...p, ageGroup: g }));
+  }, [form.birthDate]);
 
   const canSubmit = useMemo(() => {
     const f = form;
@@ -135,7 +170,9 @@ export default function RegistrationForm() {
 
     if (need(has(f.childFullName), "⚠️ الرجاء إدخال اسم الطفل/ة", childRef)) return;
     if (need(has(f.birthDate), "⚠️ الرجاء إدخال تاريخ ميلاد الطفل/ة", birthRef)) return;
-    if (need(has(f.ageGroup), "⚠️ الرجاء اختيار عمر الطفل/ة", ageRef)) return;
+
+    const safeAgeGroup = calcAgeGroupFromBirthDate(f.birthDate);
+    if (need(has(safeAgeGroup), "⚠️ تاريخ الميلاد غير مناسب. الرجاء اختيار تاريخ صحيح.", birthRef)) return;
 
     if (need(has(f.motherName), "⚠️ الرجاء إدخال اسم الأم", motherRef)) return;
     if (need(has(f.motherPhone), "⚠️ الرجاء إدخال رقم هاتف الأم", motherPhoneRef)) return;
@@ -154,10 +191,12 @@ export default function RegistrationForm() {
     setLoading(true);
 
     try {
+      const payloadToSend = { ...f, ageGroup: safeAgeGroup };
+
       const res = await fetch(`${API_BASE}/api/registrations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(f),
+        body: JSON.stringify(payloadToSend),
       });
 
       const payload = await res.json().catch(() => null);
@@ -173,24 +212,17 @@ export default function RegistrationForm() {
               const res2 = await fetch(`${API_BASE}/api/registrations`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ ...f, allowWaiting: true }),
+                body: JSON.stringify({ ...payloadToSend, allowWaiting: true }),
               });
 
               const payload2 = await res2.json().catch(() => null);
 
               if (!res2.ok) {
-                openAlert(
-                  "error",
-                  `❌ فشل الإرسال: ${payload2?.message || payload2?.error || "خطأ"}`
-                );
+                openAlert("error", `❌ فشل الإرسال: ${payload2?.message || payload2?.error || "خطأ"}`);
                 return;
               }
 
-              openAlert(
-                "success",
-                "✅ تم إدخالكم إلى قائمة الانتظار.\nإذا توفر مكان سنقوم بإرسال رسالة لكم.",
-                true
-              );
+              openAlert("success", "✅ تم إدخالكم إلى قائمة الانتظار.\nإذا توفر مكان سنقوم بإرسال رسالة لكم.", true);
             } finally {
               setLoading(false);
             }
@@ -218,11 +250,7 @@ export default function RegistrationForm() {
       const status = payload?.item?.status;
 
       if (status === "waiting") {
-        openAlert(
-          "success",
-          "✅ تم إدخالكم إلى قائمة الانتظار.\nإذا توفر مكان سنقوم بإرسال رسالة لكم.",
-          true
-        );
+        openAlert("success", "✅ تم إدخالكم إلى قائمة الانتظار.\nإذا توفر مكان سنقوم بإرسال رسالة لكم.", true);
         return;
       }
 
@@ -231,7 +259,8 @@ export default function RegistrationForm() {
         window.location.href = `/payment?id=${encodeURIComponent(id)}`;
       }, 900);
     } catch {
-openAlert("error", "❌ تعذر الاتصال بالخادم. إذا كانت هذه أول محاولة، انتظروا 10 ثوانٍ وحاولوا مرة أخرى.");    } finally {
+      openAlert("error", "❌ تعذر الاتصال بالخادم. إذا كانت هذه أول محاولة، انتظروا 10 ثوانٍ وحاولوا مرة أخرى.");
+    } finally {
       setLoading(false);
     }
   };
@@ -258,12 +287,7 @@ openAlert("error", "❌ تعذر الاتصال بالخادم. إذا كانت 
           <label className="k-label">
             <Req /> اسم الطفل/ة
           </label>
-          <input
-            ref={childRef}
-            className="k-input"
-            value={form.childFullName}
-            onChange={onChange("childFullName")}
-          />
+          <input ref={childRef} className="k-input" value={form.childFullName} onChange={onChange("childFullName")} />
 
           <label className="k-label">
             <Req /> تاريخ ميلاد الطفل/ة
@@ -271,7 +295,7 @@ openAlert("error", "❌ تعذر الاتصال بالخادم. إذا كانت 
           <input
             ref={birthRef}
             type="date"
-            className="k-input"
+            className="k-input k-date"
             value={form.birthDate}
             onChange={onChange("birthDate")}
           />
@@ -279,51 +303,8 @@ openAlert("error", "❌ تعذر الاتصال بالخادم. إذا كانت 
           <label className="k-label">
             <Req /> عمر الطفل/ة
           </label>
-          <div className="k-radioRow">
-            <label className="k-radio">
-              <input
-                ref={ageRef}
-                type="radio"
-                name="ageGroup"
-                value="6m-1y"
-                checked={form.ageGroup === "6m-1y"}
-                onChange={onChange("ageGroup")}
-              />
-              6 أشهر - سنة
-            </label>
-
-            <label className="k-radio">
-              <input
-                type="radio"
-                name="ageGroup"
-                value="1y-1.5y"
-                checked={form.ageGroup === "1y-1.5y"}
-                onChange={onChange("ageGroup")}
-              />
-              سنة - سنة ونص
-            </label>
-
-            <label className="k-radio">
-              <input
-                type="radio"
-                name="ageGroup"
-                value="1.5y-2y"
-                checked={form.ageGroup === "1.5y-2y"}
-                onChange={onChange("ageGroup")}
-              />
-              سنة ونص - سنتين
-            </label>
-
-            <label className="k-radio">
-              <input
-                type="radio"
-                name="ageGroup"
-                value="2y-3y"
-                checked={form.ageGroup === "2y-3y"}
-                onChange={onChange("ageGroup")}
-              />
-              سنتين - ثلاث
-            </label>
+          <div className="k-input k-readonly" aria-readonly="true">
+            {form.ageGroup ? ageGroupLabel(form.ageGroup) : "اختروا تاريخ الميلاد أولاً"}
           </div>
 
           <div className="k-sectionTitle">معلومات الأهل</div>
@@ -333,12 +314,7 @@ openAlert("error", "❌ تعذر الاتصال بالخادم. إذا كانت 
               <label className="k-label">
                 <Req /> اسم الأم
               </label>
-              <input
-                ref={motherRef}
-                className="k-input"
-                value={form.motherName}
-                onChange={onChange("motherName")}
-              />
+              <input ref={motherRef} className="k-input" value={form.motherName} onChange={onChange("motherName")} />
             </div>
 
             <div>
@@ -357,12 +333,7 @@ openAlert("error", "❌ تعذر الاتصال بالخادم. إذا كانت 
               <label className="k-label">
                 <Req /> اسم الأب
               </label>
-              <input
-                ref={fatherRef}
-                className="k-input"
-                value={form.fatherName}
-                onChange={onChange("fatherName")}
-              />
+              <input ref={fatherRef} className="k-input" value={form.fatherName} onChange={onChange("fatherName")} />
             </div>
 
             <div>
@@ -385,35 +356,17 @@ openAlert("error", "❌ تعذر الاتصال بالخادم. إذا كانت 
           </label>
           <div className="k-radioRow">
             <label className="k-radio">
-              <input
-                type="radio"
-                name="stayUntil"
-                value="14"
-                checked={form.stayUntil === "14"}
-                onChange={onChange("stayUntil")}
-              />
+              <input type="radio" name="stayUntil" value="14" checked={form.stayUntil === "14"} onChange={onChange("stayUntil")} />
               حتى 14:00
             </label>
 
             <label className="k-radio">
-              <input
-                type="radio"
-                name="stayUntil"
-                value="15"
-                checked={form.stayUntil === "15"}
-                onChange={onChange("stayUntil")}
-              />
+              <input type="radio" name="stayUntil" value="15" checked={form.stayUntil === "15"} onChange={onChange("stayUntil")} />
               حتى 15:00
             </label>
 
             <label className="k-radio">
-              <input
-                type="radio"
-                name="stayUntil"
-                value="16"
-                checked={form.stayUntil === "16"}
-                onChange={onChange("stayUntil")}
-              />
+              <input type="radio" name="stayUntil" value="16" checked={form.stayUntil === "16"} onChange={onChange("stayUntil")} />
               حتى 16:00
             </label>
           </div>
@@ -426,24 +379,12 @@ openAlert("error", "❌ تعذر الاتصال بالخادم. إذا كانت 
           </label>
           <div className="k-radioRow">
             <label className="k-radio">
-              <input
-                type="radio"
-                name="hasAllergy"
-                value="no"
-                checked={form.hasAllergy === "no"}
-                onChange={onChange("hasAllergy")}
-              />
+              <input type="radio" name="hasAllergy" value="no" checked={form.hasAllergy === "no"} onChange={onChange("hasAllergy")} />
               لا
             </label>
 
             <label className="k-radio">
-              <input
-                type="radio"
-                name="hasAllergy"
-                value="yes"
-                checked={form.hasAllergy === "yes"}
-                onChange={onChange("hasAllergy")}
-              />
+              <input type="radio" name="hasAllergy" value="yes" checked={form.hasAllergy === "yes"} onChange={onChange("hasAllergy")} />
               نعم
             </label>
           </div>
@@ -453,11 +394,7 @@ openAlert("error", "❌ تعذر الاتصال بالخادم. إذا كانت 
               <label className="k-label">
                 <Req /> من ماذا؟
               </label>
-              <input
-                className="k-input"
-                value={form.allergyDetails}
-                onChange={onChange("allergyDetails")}
-              />
+              <input className="k-input" value={form.allergyDetails} onChange={onChange("allergyDetails")} />
             </>
           )}
 
@@ -466,24 +403,12 @@ openAlert("error", "❌ تعذر الاتصال بالخادم. إذا كانت 
           </label>
           <div className="k-radioRow">
             <label className="k-radio">
-              <input
-                type="radio"
-                name="hasDisease"
-                value="no"
-                checked={form.hasDisease === "no"}
-                onChange={onChange("hasDisease")}
-              />
+              <input type="radio" name="hasDisease" value="no" checked={form.hasDisease === "no"} onChange={onChange("hasDisease")} />
               لا
             </label>
 
             <label className="k-radio">
-              <input
-                type="radio"
-                name="hasDisease"
-                value="yes"
-                checked={form.hasDisease === "yes"}
-                onChange={onChange("hasDisease")}
-              />
+              <input type="radio" name="hasDisease" value="yes" checked={form.hasDisease === "yes"} onChange={onChange("hasDisease")} />
               نعم
             </label>
           </div>
@@ -493,21 +418,12 @@ openAlert("error", "❌ تعذر الاتصال بالخادم. إذا كانت 
               <label className="k-label">
                 <Req /> ما هو المرض؟
               </label>
-              <input
-                className="k-input"
-                value={form.diseaseDetails}
-                onChange={onChange("diseaseDetails")}
-              />
+              <input className="k-input" value={form.diseaseDetails} onChange={onChange("diseaseDetails")} />
             </>
           )}
 
           <label className="k-label">ملاحظات (اختياري)</label>
-          <textarea
-            className="k-textarea"
-            rows={4}
-            value={form.notes}
-            onChange={onChange("notes")}
-          />
+          <textarea className="k-textarea" rows={4} value={form.notes} onChange={onChange("notes")} />
 
           <button className="k-button" disabled={loading || !canSubmit}>
             {loading ? "جاري الإرسال..." : "إرسال التسجيل"}
