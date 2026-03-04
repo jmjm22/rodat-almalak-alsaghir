@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from "react";
 import "./App.css";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5050";
+const API_BASE = "https://rodat-almalak-alsaghir.onrender.com";
 export default function RegistrationForm() {
   const initialForm = {
     childFullName: "",
@@ -231,8 +231,7 @@ export default function RegistrationForm() {
         window.location.href = `/payment?id=${encodeURIComponent(id)}`;
       }, 900);
     } catch {
-      openAlert("error", "❌ تعذر الاتصال بالخادم. تأكدوا أن السيرفر يعمل على 5050.");
-    } finally {
+openAlert("error", "❌ تعذر الاتصال بالخادم. إذا كانت هذه أول محاولة، انتظروا 10 ثوانٍ وحاولوا مرة أخرى.");    } finally {
       setLoading(false);
     }
   };
