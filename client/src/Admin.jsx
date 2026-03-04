@@ -177,7 +177,7 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
         x.address,
         String(x.stayUntil || ""),
         AGE_LABELS[x.ageGroup] || x.ageGroup || "",
-        String(x.childId || ""), // ✅ אפשר לחפש גם לפי ת"ז
+        String(x.childId || ""),
       ]
         .filter(Boolean)
         .join(" ")
@@ -376,6 +376,7 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
                 {waitingActions ? (
                   <td>
                     <span className={`groupPill ${groupBadgeClass(x.ageGroup)}`}>
+                      {isNew ? <span className="greenDot" /> : null}
                       {AGE_LABELS[x.ageGroup] || x.ageGroup || "-"}
                     </span>
                   </td>
@@ -386,9 +387,7 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
                 <td>{x.fatherName || "-"}</td>
                 <td className="cellPhone">{displayILPhone(x.fatherPhone) || "-"}</td>
 
-                <td>
-                  {x.stayUntil ? <span className={`stayPill stay-${x.stayUntil}`}>{x.stayUntil}:00</span> : "-"}
-                </td>
+                <td>{x.stayUntil ? <span className={`stayPill stay-${x.stayUntil}`}>{x.stayUntil}:00</span> : "-"}</td>
 
                 {showReceipt ? (
                   <td>
@@ -442,9 +441,10 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
                     </>
                   ) : null}
 
-                  {!isWaiting ? (
+                  {/* ✅ מאשר/נדחה רק ל"חדש" כדי למנוע שליחה כפולה */}
+                  {st === "new" ? (
                     <>
-                      <button className="miniBtn ok" type="button" onClick={() => setStatusAndNotify(x, "approved")}>
+                      <button className="miniBtn okBright" type="button" onClick={() => setStatusAndNotify(x, "approved")}>
                         מאושר
                       </button>
 
@@ -513,7 +513,6 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
                   <div className="fieldValue">{formatBirthDateIL(details.birthDate) || "-"}</div>
                 </div>
 
-                {/* ✅ חדש: ת"ז ילד */}
                 <div className="fieldCard">
                   <div className="fieldLabel">ת.ז ילד</div>
                   <div className="fieldValue">{details.childId || "-"}</div>
@@ -522,14 +521,16 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
                 <div className="fieldCard">
                   <div className="fieldLabel">אמא</div>
                   <div className="fieldValue">
-                    {details.motherName || "-"} <span className="muted">({displayILPhone(details.motherPhone) || "-"})</span>
+                    {details.motherName || "-"}{" "}
+                    <span className="muted">({displayILPhone(details.motherPhone) || "-"})</span>
                   </div>
                 </div>
 
                 <div className="fieldCard">
                   <div className="fieldLabel">אבא</div>
                   <div className="fieldValue">
-                    {details.fatherName || "-"} <span className="muted">({displayILPhone(details.fatherPhone) || "-"})</span>
+                    {details.fatherName || "-"}{" "}
+                    <span className="muted">({displayILPhone(details.fatherPhone) || "-"})</span>
                   </div>
                 </div>
 
@@ -581,7 +582,11 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
             </div>
 
             <div className="modalActions">
-              <button className="modalBtn" type="button" onClick={() => navigator.clipboard.writeText(displayILPhone(details.motherPhone || ""))}>
+              <button
+                className="modalBtn"
+                type="button"
+                onClick={() => navigator.clipboard.writeText(displayILPhone(details.motherPhone || ""))}
+              >
                 העתק טל׳ אמא
               </button>
 
@@ -606,7 +611,7 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
 
 /* =================== Group Card =================== */
 
-function GroupCard({ title, items, onRefresh, isOpen, onToggle, capMap }) {
+function GroupCard({ title, items, onRefresh, isOpen, onToggle }) {
   const occupied = items.filter((x) => ["new", "approved"].includes(x.status || "new")).length;
   const rejected = items.filter((x) => (x.status || "new") === "rejected").length;
   const hasNew = items.some((x) => (x.status || "new") === "new");
@@ -645,7 +650,7 @@ function GroupCard({ title, items, onRefresh, isOpen, onToggle, capMap }) {
       </button>
 
       <div className="groupBody">
-        <AdminTable items={items} onRefresh={onRefresh} capMap={capMap} hideWaiting={true} waitingActions={false} />
+        <AdminTable items={items} onRefresh={onRefresh} hideWaiting={true} waitingActions={false} />
       </div>
     </div>
   );
@@ -791,13 +796,7 @@ export default function Admin() {
               </button>
             </div>
 
-            <AdminTable
-              items={topItems}
-              onRefresh={load}
-              capMap={cap}
-              hideWaiting={false}
-              waitingActions={topTable === "waiting"}
-            />
+            <AdminTable items={topItems} onRefresh={load} capMap={cap} hideWaiting={false} waitingActions={topTable === "waiting"} />
           </div>
         ) : null}
       </div>
@@ -807,22 +806,26 @@ export default function Admin() {
           <GroupCard
             key={k}
             title={AGE_LABELS[k]}
-            items={grouped[k].filter((x) => (x.status || "new") !== "waiting")}
+            items={grouped[k].filter((x) => {
+              const st = x.status || "new";
+              return st !== "waiting" && st !== "rejected";
+            })}
             onRefresh={load}
             isOpen={openGroups[k]}
             onToggle={() => toggleGroup(k)}
-            capMap={cap}
           />
         ))}
 
         {grouped.other.length > 0 ? (
           <GroupCard
             title="أخرى / خارج النطاق"
-            items={grouped.other.filter((x) => (x.status || "new") !== "waiting")}
+            items={grouped.other.filter((x) => {
+              const st = x.status || "new";
+              return st !== "waiting" && st !== "rejected";
+            })}
             onRefresh={load}
             isOpen={openGroups.other}
             onToggle={() => toggleGroup("other")}
-            capMap={cap}
           />
         ) : null}
       </div>
