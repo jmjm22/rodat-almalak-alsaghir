@@ -22,6 +22,7 @@ app.use(
     allowedHeaders: ["Content-Type"],
   })
 );
+
 app.use(express.json());
 
 const PORT = process.env.PORT || 5050;
@@ -29,7 +30,6 @@ const PORT = process.env.PORT || 5050;
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data");
 const DB_FILE = path.join(DATA_DIR, "registrations.json");
 const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(process.cwd(), "uploads");
-/* ================= CAPACITY ================= */
 
 const MAX_PER_GROUP = {
   "6m-1y": 7,
@@ -46,14 +46,9 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 if (!fs.existsSync(DB_FILE)) fs.writeFileSync(DB_FILE, JSON.stringify([]));
 
-/* ================= DB ================= */
-
 const readDb = () => JSON.parse(fs.readFileSync(DB_FILE, "utf-8"));
 const writeDb = (items) => fs.writeFileSync(DB_FILE, JSON.stringify(items, null, 2));
-
 const makeId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
-/* ================= CAPACITY LOGIC ================= */
 
 function countOccupiedInGroup(db, ageGroup) {
   return db.filter(
@@ -73,7 +68,6 @@ function getCapacity(db, ageGroup) {
   };
 }
 
-/* ⭐ AUTO PROMOTE WAITING */
 function promoteWaitingIfPossible(db, ageGroup) {
   while (true) {
     const cap = getCapacity(db, ageGroup);
@@ -98,8 +92,6 @@ function promoteWaitingIfPossible(db, ageGroup) {
   }
 }
 
-/* ================= PHONE ================= */
-
 function normalizeIL(phone) {
   if (!phone) return "";
   let p = phone.toString().trim().replace(/\s|-/g, "");
@@ -109,12 +101,32 @@ function normalizeIL(phone) {
   return p;
 }
 
-function isValidILPhone(phone) {
-  const p = normalizeIL(phone);
-  return /^\+9725\d{8}$/.test(p);
+function normStr(s) {
+  return (s || "")
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
 }
 
-/* ================= UPLOAD ================= */
+function isDuplicate(db, body) {
+  const child = normStr(body.childFullName);
+  const birthDate = (body.birthDate || "").toString().trim();
+  const motherPhone = normalizeIL(body.motherPhone);
+  const fatherPhone = normalizeIL(body.fatherPhone);
+
+  if (!child || !birthDate) return false;
+
+  return db.some((x) => {
+    const sameChild = normStr(x.childFullName) === child;
+    const sameBirth = (x.birthDate || "").toString().trim() === birthDate;
+
+    const sameMother = normalizeIL(x.motherPhone) && normalizeIL(x.motherPhone) === motherPhone;
+    const sameFather = normalizeIL(x.fatherPhone) && normalizeIL(x.fatherPhone) === fatherPhone;
+
+    return sameChild && sameBirth && (sameMother || sameFather);
+  });
+}
 
 const storage = multer.diskStorage({
   destination: (_, __, cb) => cb(null, UPLOADS_DIR),
@@ -129,8 +141,6 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 app.use("/uploads", express.static(UPLOADS_DIR));
 
-/* ================= REGISTER ================= */
-
 app.post("/api/registrations", (req, res) => {
   try {
     const body = req.body || {};
@@ -139,7 +149,18 @@ app.post("/api/registrations", (req, res) => {
 
     if (!AGE_GROUPS.has(ageGroup)) return res.status(400).json({ error: "Invalid ageGroup" });
 
+    if (body.stayUntil && !VALID_STAY.has(String(body.stayUntil))) {
+      return res.status(400).json({ error: "Invalid stayUntil" });
+    }
+
     const db = readDb();
+
+    if (isDuplicate(db, body)) {
+      return res.status(409).json({
+        error: "duplicate",
+        message: "❌ כבר קיימת הרשמה עבור הילד/ה עם הפרטים הללו.",
+      });
+    }
 
     const cap = getCapacity(db, ageGroup);
     const full = !cap.hasPlace;
@@ -161,8 +182,7 @@ app.post("/api/registrations", (req, res) => {
       fatherPhone: normalizeIL(body.fatherPhone),
       status: full ? "waiting" : "new",
       receiptUrl: "",
-
-      // ✅ server-side "sent once" flags
+      receiptUploadedAt: "",
       approvedNotifiedAt: "",
       rejectedNotifiedAt: "",
     };
@@ -180,13 +200,43 @@ app.post("/api/registrations", (req, res) => {
   }
 });
 
-/* ================= GET ================= */
-
 app.get("/api/registrations", (_, res) => {
   res.json(readDb());
 });
 
-/* ================= UPDATE STATUS / FIELDS ================= */
+app.get("/api/registrations/:id", (req, res) => {
+  try {
+    const { id } = req.params;
+    const db = readDb();
+    const item = db.find((x) => x.id === id);
+    if (!item) return res.status(404).json({ error: "Not found" });
+    return res.json({ ok: true, item });
+  } catch {
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
+app.post("/api/registrations/:id/receipt", upload.single("receipt"), (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!req.file) return res.status(400).json({ error: "No file" });
+
+    const db = readDb();
+    const idx = db.findIndex((x) => x.id === id);
+    if (idx === -1) return res.status(404).json({ error: "Not found" });
+
+    db[idx] = {
+      ...db[idx],
+      receiptUrl: `/uploads/${req.file.filename}`,
+      receiptUploadedAt: new Date().toISOString(),
+    };
+
+    writeDb(db);
+    res.json({ ok: true, item: db[idx] });
+  } catch {
+    res.status(500).json({ error: "Server error" });
+  }
+});
 
 app.patch("/api/registrations/:id", (req, res) => {
   try {
@@ -199,7 +249,6 @@ app.patch("/api/registrations/:id", (req, res) => {
 
     const current = db[idx];
 
-    // allow updating status + ageGroup (you use it in "addFromWaiting")
     const nextStatus = body.status !== undefined ? String(body.status) : undefined;
     const nextAgeGroup = body.ageGroup !== undefined ? String(body.ageGroup).trim() : undefined;
 
@@ -210,8 +259,6 @@ app.patch("/api/registrations/:id", (req, res) => {
       return res.status(400).json({ error: "Invalid ageGroup" });
     }
 
-    // ✅ prevent double send (server-side lock)
-    // once approvedNotifiedAt exists -> cannot set approved again
     if (nextStatus === "approved" && current.approvedNotifiedAt) {
       return res.status(409).json({
         error: "already_notified",
@@ -227,17 +274,14 @@ app.patch("/api/registrations/:id", (req, res) => {
 
     const nowIso = new Date().toISOString();
 
-    // build updated record
     const updated = {
       ...current,
       ...body,
     };
 
-    // keep phone normalized if sent
     if (body.motherPhone !== undefined) updated.motherPhone = normalizeIL(body.motherPhone);
     if (body.fatherPhone !== undefined) updated.fatherPhone = normalizeIL(body.fatherPhone);
 
-    // set one-time flags when moving to approved/rejected
     if (nextStatus === "approved" && !current.approvedNotifiedAt) {
       updated.approvedNotifiedAt = nowIso;
     }
@@ -248,11 +292,7 @@ app.patch("/api/registrations/:id", (req, res) => {
     db[idx] = updated;
     writeDb(db);
 
-    // ⭐ אם התפנה מקום → מקדמים waiting (רק אם עברנו ל-rejected והיינו new/approved)
-    if (
-      nextStatus === "rejected" &&
-      ["new", "approved"].includes(current.status || "new")
-    ) {
+    if (nextStatus === "rejected" && ["new", "approved"].includes(current.status || "new")) {
       promoteWaitingIfPossible(db, current.ageGroup);
       writeDb(db);
     }
@@ -262,8 +302,6 @@ app.patch("/api/registrations/:id", (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 });
-
-/* ================= DELETE ================= */
 
 app.delete("/api/registrations/:id", (req, res) => {
   const { id } = req.params;
@@ -280,8 +318,6 @@ app.delete("/api/registrations/:id", (req, res) => {
 
   res.json({ ok: true });
 });
-
-/* ================= CAPACITY ================= */
 
 app.get("/api/capacity", (_, res) => {
   const db = readDb();

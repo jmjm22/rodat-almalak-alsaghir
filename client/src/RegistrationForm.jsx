@@ -1,9 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 
-const API_BASE = "https://rodat-almalak-alsaghir.onrender.com";
+const API_BASE = import.meta.env.VITE_API_BASE || "https://rodat-almalak-alsaghir.onrender.com";
 
-// ✅ calculate ageGroup from birthDate (YYYY-MM-DD)
 function calcAgeGroupFromBirthDate(birthDate) {
   if (!birthDate) return "";
   const bd = new Date(birthDate);
@@ -125,7 +124,6 @@ export default function RegistrationForm() {
     });
   };
 
-  // ✅ auto-set ageGroup from birthDate (prevents Invalid ageGroup)
   useEffect(() => {
     const g = calcAgeGroupFromBirthDate(form.birthDate);
     setForm((p) => ({ ...p, ageGroup: g }));
@@ -201,6 +199,11 @@ export default function RegistrationForm() {
 
       const payload = await res.json().catch(() => null);
 
+      if (!res.ok && res.status === 409 && payload?.error === "duplicate") {
+        openAlert("error", payload?.message || "❌ כבר קיימת הרשמה עם אותם פרטים.");
+        return;
+      }
+
       if (!res.ok && res.status === 409 && payload?.error === "full") {
         openConfirm(
           "error",
@@ -235,11 +238,6 @@ export default function RegistrationForm() {
         return;
       }
 
-      if (!res.ok && res.status === 409 && payload?.error === "duplicate") {
-        openAlert("error", payload?.message || "❌ כבר קיימת הרשמה עם אותם פרטים.");
-        return;
-      }
-
       if (!res.ok) {
         const serverMsg = payload?.message || payload?.error || `HTTP ${res.status}`;
         openAlert("error", `❌ فشل الإرسال: ${serverMsg}`);
@@ -259,7 +257,7 @@ export default function RegistrationForm() {
         window.location.href = `/payment?id=${encodeURIComponent(id)}`;
       }, 900);
     } catch {
-      openAlert("error", "❌ تعذر الاتصال بالخادم. إذا كانت هذه أول محاولة، انتظروا 10 ثوانٍ وحاولوا مرة أخرى.");
+      openAlert("error", "❌ تعذر الاتصال بالخادم. انتظروا 10 ثوانٍ وحاولوا مرة أخرى.");
     } finally {
       setLoading(false);
     }
@@ -284,25 +282,13 @@ export default function RegistrationForm() {
         <form className="k-form" onSubmit={submit}>
           <div className="k-sectionTitle">معلومات الطفل/ة</div>
 
-          <label className="k-label">
-            <Req /> اسم الطفل/ة
-          </label>
+          <label className="k-label"><Req /> اسم الطفل/ة</label>
           <input ref={childRef} className="k-input" value={form.childFullName} onChange={onChange("childFullName")} />
 
-          <label className="k-label">
-            <Req /> تاريخ ميلاد الطفل/ة
-          </label>
-          <input
-            ref={birthRef}
-            type="date"
-            className="k-input k-date"
-            value={form.birthDate}
-            onChange={onChange("birthDate")}
-          />
+          <label className="k-label"><Req /> تاريخ ميلاد الطفل/ة</label>
+          <input ref={birthRef} type="date" className="k-input k-date" value={form.birthDate} onChange={onChange("birthDate")} />
 
-          <label className="k-label">
-            <Req /> عمر الطفل/ة
-          </label>
+          <label className="k-label"><Req /> عمر الطفل/ة</label>
           <div className="k-input k-readonly" aria-readonly="true">
             {form.ageGroup ? ageGroupLabel(form.ageGroup) : "اختروا تاريخ الميلاد أولاً"}
           </div>
@@ -311,60 +297,38 @@ export default function RegistrationForm() {
 
           <div className="k-grid2">
             <div>
-              <label className="k-label">
-                <Req /> اسم الأم
-              </label>
+              <label className="k-label"><Req /> اسم الأم</label>
               <input ref={motherRef} className="k-input" value={form.motherName} onChange={onChange("motherName")} />
             </div>
 
             <div>
-              <label className="k-label">
-                <Req /> هاتف الأم
-              </label>
-              <input
-                ref={motherPhoneRef}
-                className="k-input"
-                value={form.motherPhone}
-                onChange={onChange("motherPhone")}
-              />
+              <label className="k-label"><Req /> هاتف الأم</label>
+              <input ref={motherPhoneRef} className="k-input" value={form.motherPhone} onChange={onChange("motherPhone")} />
             </div>
 
             <div>
-              <label className="k-label">
-                <Req /> اسم الأب
-              </label>
+              <label className="k-label"><Req /> اسم الأب</label>
               <input ref={fatherRef} className="k-input" value={form.fatherName} onChange={onChange("fatherName")} />
             </div>
 
             <div>
-              <label className="k-label">
-                <Req /> هاتف الأب
-              </label>
-              <input
-                ref={fatherPhoneRef}
-                className="k-input"
-                value={form.fatherPhone}
-                onChange={onChange("fatherPhone")}
-              />
+              <label className="k-label"><Req /> هاتف الأب</label>
+              <input ref={fatherPhoneRef} className="k-input" value={form.fatherPhone} onChange={onChange("fatherPhone")} />
             </div>
           </div>
 
           <div className="k-sectionTitle">تفاصيل إضافية</div>
 
-          <label className="k-label">
-            <Req /> حتى أي ساعة؟
-          </label>
+          <label className="k-label"><Req /> حتى أي ساعة؟</label>
           <div className="k-radioRow">
             <label className="k-radio">
               <input type="radio" name="stayUntil" value="14" checked={form.stayUntil === "14"} onChange={onChange("stayUntil")} />
               حتى 14:00
             </label>
-
             <label className="k-radio">
               <input type="radio" name="stayUntil" value="15" checked={form.stayUntil === "15"} onChange={onChange("stayUntil")} />
               حتى 15:00
             </label>
-
             <label className="k-radio">
               <input type="radio" name="stayUntil" value="16" checked={form.stayUntil === "16"} onChange={onChange("stayUntil")} />
               حتى 16:00
@@ -374,15 +338,12 @@ export default function RegistrationForm() {
           <label className="k-label">العنوان (اختياري)</label>
           <input className="k-input" value={form.address} onChange={onChange("address")} />
 
-          <label className="k-label">
-            <Req /> هل لدى الطفل/ة أي نوع من الحساسية؟
-          </label>
+          <label className="k-label"><Req /> هل لدى الطفل/ة أي نوع من الحساسية؟</label>
           <div className="k-radioRow">
             <label className="k-radio">
               <input type="radio" name="hasAllergy" value="no" checked={form.hasAllergy === "no"} onChange={onChange("hasAllergy")} />
               لا
             </label>
-
             <label className="k-radio">
               <input type="radio" name="hasAllergy" value="yes" checked={form.hasAllergy === "yes"} onChange={onChange("hasAllergy")} />
               نعم
@@ -391,22 +352,17 @@ export default function RegistrationForm() {
 
           {form.hasAllergy === "yes" && (
             <>
-              <label className="k-label">
-                <Req /> من ماذا؟
-              </label>
+              <label className="k-label"><Req /> من ماذا؟</label>
               <input className="k-input" value={form.allergyDetails} onChange={onChange("allergyDetails")} />
             </>
           )}
 
-          <label className="k-label">
-            <Req /> هل لدى الطفل/ة حالة صحية يجب أن نكون على علم بها؟
-          </label>
+          <label className="k-label"><Req /> هل لدى الطفل/ة حالة صحية يجب أن نكون على علم بها؟</label>
           <div className="k-radioRow">
             <label className="k-radio">
               <input type="radio" name="hasDisease" value="no" checked={form.hasDisease === "no"} onChange={onChange("hasDisease")} />
               لا
             </label>
-
             <label className="k-radio">
               <input type="radio" name="hasDisease" value="yes" checked={form.hasDisease === "yes"} onChange={onChange("hasDisease")} />
               نعم
@@ -415,9 +371,7 @@ export default function RegistrationForm() {
 
           {form.hasDisease === "yes" && (
             <>
-              <label className="k-label">
-                <Req /> ما هو المرض؟
-              </label>
+              <label className="k-label"><Req /> ما هو المرض؟</label>
               <input className="k-input" value={form.diseaseDetails} onChange={onChange("diseaseDetails")} />
             </>
           )}

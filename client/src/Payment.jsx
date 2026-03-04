@@ -61,7 +61,8 @@ export default function Payment() {
       `البنك: ${BANK_NAME}\n` +
       `الفرع: ${BANK_BRANCH}\n` +
       `رقم الحساب: ${BANK_ACCOUNT}\n` +
-      `مهم: اكتبوا رقم التسجيل في ملاحظة التحويل: ${regId || "—"}\n`;
+      `ملاحظة التحويل: اسم الطفل + هاتف الأم\n` +
+      `رقم التسجيل: ${regId || "—"}\n`;
 
     try {
       await navigator.clipboard.writeText(text);
