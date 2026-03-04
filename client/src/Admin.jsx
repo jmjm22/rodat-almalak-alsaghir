@@ -22,7 +22,7 @@ const STATUS_LABEL = {
 
 /* =================== Helpers =================== */
 
-const getRowId = (x) => x?.id || x?._id || "";
+const getRowId = (x) => x?._id || x?.id || "";
 
 function normalizeIL(phone) {
   if (!phone) return "";
@@ -92,22 +92,26 @@ function groupBadgeClass(g) {
   return "g-other";
 }
 
+function receiptFullUrl(receiptUrl) {
+  if (!receiptUrl) return "";
+  if (/^https?:\/\//i.test(receiptUrl)) return receiptUrl;
+  return `${API_BASE}${receiptUrl}`;
+}
+
 function receiptLinkById(id) {
   if (!id) return "";
   return `${API_BASE}/api/registrations/${encodeURIComponent(id)}/receipt`;
 }
 
-// ✅ קבלה נשמרת ב-Mongo -> פותחים דרך ה-API
-function openReceipt(x) {
-  const id = getRowId(x);
-  if (!id) return;
-  window.open(receiptLinkById(id), "_blank");
-}
-
 function downloadXLSX(filename, items) {
   const rows = items.map((x) => {
     const id = getRowId(x);
-    const receiptLink = x.receipt && id ? receiptLinkById(id) : "";
+    const receiptLink =
+      x.receiptUrl
+        ? receiptFullUrl(x.receiptUrl)
+        : (x.receiptUploadedAt || x.receipt) && id
+        ? receiptLinkById(id)
+        : "";
 
     return {
       "תאריך הרשמה": x.createdAt ? formatCreatedAtIL(x.createdAt) : "",
@@ -165,6 +169,61 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
   const [sortBy, setSortBy] = useState("dateDesc");
   const [q, setQ] = useState("");
   const [details, setDetails] = useState(null);
+
+  // ✅ receipt inside modal (same browser, same modal)
+  const [receiptViewUrl, setReceiptViewUrl] = useState("");
+  const [receiptLoading, setReceiptLoading] = useState(false);
+  const [receiptErr, setReceiptErr] = useState("");
+
+  useEffect(() => {
+    return () => {
+      if (receiptViewUrl && receiptViewUrl.startsWith("blob:")) URL.revokeObjectURL(receiptViewUrl);
+    };
+  }, [receiptViewUrl]);
+
+  const clearReceiptState = () => {
+    setReceiptErr("");
+    setReceiptLoading(false);
+    setReceiptViewUrl((prev) => {
+      if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev);
+      return "";
+    });
+  };
+
+  const openReceiptInModal = async (x) => {
+    const id = getRowId(x);
+    if (!id) return;
+
+    setReceiptErr("");
+    setReceiptLoading(true);
+
+    try {
+      if (x.receiptUrl) {
+        setReceiptViewUrl(receiptFullUrl(x.receiptUrl));
+        return;
+      }
+
+      const res = await fetch(receiptLinkById(id));
+      if (!res.ok) {
+        clearReceiptState();
+        setReceiptErr("אין קבלה לרשומה הזו.");
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+
+      setReceiptViewUrl((prev) => {
+        if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev);
+        return url;
+      });
+    } catch {
+      clearReceiptState();
+      setReceiptErr("בעיה בפתיחת הקבלה");
+    } finally {
+      setReceiptLoading(false);
+    }
+  };
 
   const showReceipt = !waitingActions;
 
@@ -300,6 +359,11 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
     }
   };
 
+  const closeDetails = () => {
+    clearReceiptState();
+    setDetails(null);
+  };
+
   if (!items.length) return <div className="adminEmpty">אין נרשמים בקבוצה הזו.</div>;
 
   const statusOptions = hideWaiting
@@ -345,7 +409,11 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
             <option value="stay">מיון: שעה (14 לפני 16)</option>
           </select>
 
-          <button className="adminBtn small" type="button" onClick={() => downloadXLSX(`registrations-${new Date().toISOString().slice(0, 10)}.xlsx`, filtered)}>
+          <button
+            className="adminBtn small"
+            type="button"
+            onClick={() => downloadXLSX(`registrations-${new Date().toISOString().slice(0, 10)}.xlsx`, filtered)}
+          >
             הורדה (Excel)
           </button>
         </div>
@@ -407,8 +475,15 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
 
                 {showReceipt ? (
                   <td>
-                    {x.receipt ? (
-                      <button className="receiptLink" type="button" onClick={() => openReceipt(x)}>
+                    {x.receiptUrl || x.receiptUploadedAt || x.receipt ? (
+                      <button
+                        className="receiptLink"
+                        type="button"
+                        onClick={() => {
+                          setDetails(x);
+                          setTimeout(() => openReceiptInModal(x), 0);
+                        }}
+                      >
                         פתח
                       </button>
                     ) : (
@@ -418,13 +493,26 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
                 ) : null}
 
                 <td className="actionsCell">
-                  <button className="miniBtn" type="button" onClick={() => setDetails(x)}>
+                  <button
+                    className="miniBtn"
+                    type="button"
+                    onClick={() => {
+                      clearReceiptState();
+                      setDetails(x);
+                    }}
+                  >
                     פרטים
                   </button>
 
                   {waitingActions && isWaiting ? (
                     <>
-                      <button className="miniBtn ok" type="button" disabled={!hasPlace} title={hasPlace ? "שליחת הודעה לאמא" : "אין מקום בקבוצה כרגע"} onClick={() => sendPlaceMsgToWaiting(x)}>
+                      <button
+                        className="miniBtn ok"
+                        type="button"
+                        disabled={!hasPlace}
+                        title={hasPlace ? "שליחת הודעה לאמא" : "אין מקום בקבוצה כרגע"}
+                        onClick={() => sendPlaceMsgToWaiting(x)}
+                      >
                         🟢 התפנה מקום
                       </button>
 
@@ -432,7 +520,15 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
                         className="miniBtn"
                         type="button"
                         title="וואטסאפ לאמא"
-                        onClick={() => window.open(waLink(x.motherPhone, `🌸 روضة الملاك الصغير\n\nأصبح هناك مكان متاح الآن.\nهل ما زلتم ترغبون بتسجيل الطفل ${x.childFullName || ""} ؟`), "_blank")}
+                        onClick={() =>
+                          window.open(
+                            waLink(
+                              x.motherPhone,
+                              `🌸 روضة الملاك الصغير\n\nأصبح هناك مكان متاح الآن.\nهل ما زلتم ترغبون بتسجيل الطفل ${x.childFullName || ""} ؟`
+                            ),
+                            "_blank"
+                          )
+                        }
                       >
                         💬 וואטסאפ
                       </button>
@@ -475,7 +571,7 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
       {!filtered.length ? <div className="adminEmpty">אין תוצאות לפי הסינון.</div> : null}
 
       {details ? (
-        <div className="modalOverlay" onClick={() => setDetails(null)}>
+        <div className="modalOverlay" onClick={closeDetails}>
           <div className="modalCard" onClick={(e) => e.stopPropagation()}>
             <div className="modalHeader">
               <div className="modalTitle">
@@ -484,9 +580,11 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span className={`statusPill s-${details.status || "new"}`}>{STATUS_LABEL[details.status || "new"] || (details.status || "new")}</span>
+                <span className={`statusPill s-${details.status || "new"}`}>
+                  {STATUS_LABEL[details.status || "new"] || (details.status || "new")}
+                </span>
 
-                <button className="modalClose" type="button" onClick={() => setDetails(null)}>
+                <button className="modalClose" type="button" onClick={closeDetails}>
                   ✕
                 </button>
               </div>
@@ -555,13 +653,31 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
                   <div className="fieldValue">{details.notes || "-"}</div>
                 </div>
 
-                {details.receipt ? (
+                {details.receiptUrl || details.receiptUploadedAt || details.receipt ? (
                   <div className="fieldCard wide">
                     <div className="fieldLabel">קבלה</div>
-                    <div className="fieldValue">
-                      <button className="receiptLink" type="button" onClick={() => openReceipt(details)}>
-                        פתח קבלה
-                      </button>
+
+                    <div className="fieldValue" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                        <button className="receiptLink" type="button" onClick={() => openReceiptInModal(details)}>
+                          הצג קבלה
+                        </button>
+
+                        {receiptViewUrl ? (
+                          <button className="receiptLink" type="button" onClick={clearReceiptState}>
+                            סגור קבלה
+                          </button>
+                        ) : null}
+                      </div>
+
+                      {receiptLoading ? <div className="adminEmpty">טוען קבלה...</div> : null}
+                      {receiptErr ? <div className="adminErr">{receiptErr}</div> : null}
+
+                      {receiptViewUrl ? (
+                        <div style={{ borderRadius: 14, overflow: "hidden", border: "1px solid rgba(0,0,0,0.08)" }}>
+                          <img src={receiptViewUrl} alt="receipt" style={{ width: "100%", display: "block" }} />
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 ) : null}
@@ -573,11 +689,15 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
                 העתק טל׳ אמא
               </button>
 
-              <button className="modalBtn" type="button" onClick={() => window.open(waLink(details.motherPhone, `שלום, לגבי ההרשמה של ${details.childFullName || ""}`), "_blank")}>
+              <button
+                className="modalBtn"
+                type="button"
+                onClick={() => window.open(waLink(details.motherPhone, `שלום, לגבי ההרשמה של ${details.childFullName || ""}`), "_blank")}
+              >
                 וואטסאפ לאמא
               </button>
 
-              <button className="modalBtn primary" type="button" onClick={() => setDetails(null)}>
+              <button className="modalBtn primary" type="button" onClick={closeDetails}>
                 סגור
               </button>
             </div>

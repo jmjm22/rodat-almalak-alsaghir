@@ -668,21 +668,62 @@ body{
   box-shadow: inset 0 0 0 1px rgba(56,209,138,0.18);
 }
 
-.greenDot{
-  width:10px;
-  height:10px;
-  border-radius:50%;
-  background: rgba(27,127,58,0.95);
-  box-shadow: 0 0 0 4px rgba(27,127,58,0.14);
-  display:inline-block;
-  margin-left:8px;
+/* ====== Responsive improvements for tools + table ====== */
+
+.adminTableTools .toolRow > *{
+  max-width: 100%;
 }
 
-.miniBtn.okBright{
-  background: rgba(56,209,138,0.32);
-  border-color: rgba(56,209,138,0.30);
+@media (max-width: 760px){
+  .toolRow{
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .adminSearch{
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
+  .adminSelect{
+    width: 100%;
+    min-width: 0;
+  }
+
+  .adminBtn.small{
+    width: 100%;
+    grid-column: 1 / -1;
+  }
+
+  .actionsCell{
+    min-width: 220px;
+  }
 }
-.miniBtn.okBright:hover{
-  opacity:.95;
-  transform: translateY(-1px);
+
+@media (max-width: 480px){
+  .toolRow{
+    grid-template-columns: 1fr;
+  }
+
+  .actionsCell{
+    min-width: 200px;
+  }
+}
+
+/* Table: make horizontal scroll nicer */
+.adminTableWrap{
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.adminTable{
+  min-width: 980px;
+}
+
+/* On very small screens allow smaller min-width */
+@media (max-width: 520px){
+  .adminTable{
+    min-width: 860px;
+  }
 }
