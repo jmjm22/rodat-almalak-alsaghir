@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import "./Admin.css";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "https://rodat-almalak-alsaghir.onrender.com";
+const API_BASE =
+  import.meta.env.VITE_API_BASE || "https://rodat-almalak-alsaghir.onrender.com";
 
 const AGE_LABELS = {
   "6m-1y": "6 أشهر - سنة",
@@ -22,7 +23,7 @@ const STATUS_LABEL = {
 
 /* =================== Helpers =================== */
 
-const getRowId = (x) => x?._id || x?.id || "";
+const getRowId = (x) => x?.id || x?._id || "";
 
 function normalizeIL(phone) {
   if (!phone) return "";
@@ -92,12 +93,6 @@ function groupBadgeClass(g) {
   return "g-other";
 }
 
-function receiptFullUrl(receiptUrl) {
-  if (!receiptUrl) return "";
-  if (/^https?:\/\//i.test(receiptUrl)) return receiptUrl;
-  return `${API_BASE}${receiptUrl}`;
-}
-
 function receiptLinkById(id) {
   if (!id) return "";
   return `${API_BASE}/api/registrations/${encodeURIComponent(id)}/receipt`;
@@ -106,12 +101,7 @@ function receiptLinkById(id) {
 function downloadXLSX(filename, items) {
   const rows = items.map((x) => {
     const id = getRowId(x);
-    const receiptLink =
-      x.receiptUrl
-        ? receiptFullUrl(x.receiptUrl)
-        : (x.receiptUploadedAt || x.receipt) && id
-        ? receiptLinkById(id)
-        : "";
+    const receiptLink = x.receipt && id ? receiptLinkById(id) : "";
 
     return {
       "תאריך הרשמה": x.createdAt ? formatCreatedAtIL(x.createdAt) : "",
@@ -121,7 +111,7 @@ function downloadXLSX(filename, items) {
       "ת.ז ילד": x.childId ? `'${String(x.childId).trim()}` : "",
 
       "תאריך לידה": formatBirthDateIL(x.birthDate || ""),
-      "כיתה": AGE_LABELS[x.ageGroup] || x.ageGroup || "",
+      כיתה: AGE_LABELS[x.ageGroup] || x.ageGroup || "",
 
       "שם האם": x.motherName || "",
       "טלפון אם": displayILPhone(x.motherPhone || ""),
@@ -152,7 +142,10 @@ function downloadXLSX(filename, items) {
 
   const keys = Object.keys(rows[0] || { "תאריך הרשמה": "" });
   ws["!cols"] = keys.map((k) => {
-    const maxLen = Math.max(k.length, ...rows.map((r) => (r[k] ? String(r[k]).length : 0)));
+    const maxLen = Math.max(
+      k.length,
+      ...rows.map((r) => (r[k] ? String(r[k]).length : 0))
+    );
     return { wch: Math.min(45, Math.max(12, maxLen + 2)) };
   });
 
@@ -163,69 +156,30 @@ function downloadXLSX(filename, items) {
 
 /* =================== Table =================== */
 
-function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActions = false }) {
+function AdminTable({
+  items,
+  onRefresh,
+  capMap,
+  hideWaiting = false,
+  waitingActions = false,
+}) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [stayFilter, setStayFilter] = useState("all");
   const [sortBy, setSortBy] = useState("dateDesc");
   const [q, setQ] = useState("");
   const [details, setDetails] = useState(null);
 
-  // ✅ receipt inside modal (same browser, same modal)
-  const [receiptViewUrl, setReceiptViewUrl] = useState("");
-  const [receiptLoading, setReceiptLoading] = useState(false);
-  const [receiptErr, setReceiptErr] = useState("");
-
-  useEffect(() => {
-    return () => {
-      if (receiptViewUrl && receiptViewUrl.startsWith("blob:")) URL.revokeObjectURL(receiptViewUrl);
-    };
-  }, [receiptViewUrl]);
-
-  const clearReceiptState = () => {
-    setReceiptErr("");
-    setReceiptLoading(false);
-    setReceiptViewUrl((prev) => {
-      if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev);
-      return "";
-    });
-  };
-
-  const openReceiptInModal = async (x) => {
-    const id = getRowId(x);
-    if (!id) return;
-
-    setReceiptErr("");
-    setReceiptLoading(true);
-
-    try {
-      if (x.receiptUrl) {
-        setReceiptViewUrl(receiptFullUrl(x.receiptUrl));
-        return;
-      }
-
-      const res = await fetch(receiptLinkById(id));
-      if (!res.ok) {
-        clearReceiptState();
-        setReceiptErr("אין קבלה לרשומה הזו.");
-        return;
-      }
-
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-
-      setReceiptViewUrl((prev) => {
-        if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev);
-        return url;
-      });
-    } catch {
-      clearReceiptState();
-      setReceiptErr("בעיה בפתיחת הקבלה");
-    } finally {
-      setReceiptLoading(false);
-    }
-  };
+  // ✅ NEW: receipt modal
+  const [receiptView, setReceiptView] = useState(null);
 
   const showReceipt = !waitingActions;
+
+  // ✅ קבלה במודאל בתוך האתר
+  function openReceipt(x) {
+    const id = getRowId(x);
+    if (!id) return;
+    setReceiptView(receiptLinkById(id));
+  }
 
   const stats = useMemo(() => {
     const c = { new: 0, waiting: 0, approved: 0, rejected: 0 };
@@ -244,7 +198,8 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
 
       if (hideWaiting && st === "waiting") return false;
       if (statusFilter !== "all" && st !== statusFilter) return false;
-      if (stayFilter !== "all" && String(x.stayUntil || "") !== stayFilter) return false;
+      if (stayFilter !== "all" && String(x.stayUntil || "") !== stayFilter)
+        return false;
 
       if (!qq) return true;
 
@@ -266,7 +221,8 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
       return blob.includes(qq);
     });
 
-    const rank = (s) => ({ waiting: 0, new: 1, approved: 2, rejected: 3 }[s || "new"] ?? 9);
+    const rank = (s) =>
+      ({ waiting: 0, new: 1, approved: 2, rejected: 3 }[s || "new"] ?? 9);
 
     return [...base].sort((a, b) => {
       if (sortBy === "dateAsc") return new Date(a.createdAt) - new Date(b.createdAt);
@@ -279,11 +235,14 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
   const setStatusAndNotify = async (x, status) => {
     try {
       const id = getRowId(x);
-      const res = await fetch(`${API_BASE}/api/registrations/${encodeURIComponent(id)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
+      const res = await fetch(
+        `${API_BASE}/api/registrations/${encodeURIComponent(id)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status }),
+        }
+      );
 
       const data = await res.json().catch(() => ({}));
 
@@ -309,7 +268,11 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
         `مع خالص التقدير 🌷`;
 
       const link =
-        status === "approved" ? waLink(phone, msgApproved) : status === "rejected" ? waLink(phone, msgRejected) : "";
+        status === "approved"
+          ? waLink(phone, msgApproved)
+          : status === "rejected"
+          ? waLink(phone, msgRejected)
+          : "";
 
       if (link) window.open(link, "_blank");
 
@@ -323,7 +286,9 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
     const id = getRowId(x);
     if (!id) return;
     if (!window.confirm("בטוחה למחוק?")) return;
-    await fetch(`${API_BASE}/api/registrations/${encodeURIComponent(id)}`, { method: "DELETE" });
+    await fetch(`${API_BASE}/api/registrations/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
     onRefresh();
   };
 
@@ -341,11 +306,14 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
   const addFromWaiting = async (x) => {
     try {
       const id = getRowId(x);
-      const res = await fetch(`${API_BASE}/api/registrations/${encodeURIComponent(id)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "new" }),
-      });
+      const res = await fetch(
+        `${API_BASE}/api/registrations/${encodeURIComponent(id)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "new" }),
+        }
+      );
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -359,12 +327,8 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
     }
   };
 
-  const closeDetails = () => {
-    clearReceiptState();
-    setDetails(null);
-  };
-
-  if (!items.length) return <div className="adminEmpty">אין נרשמים בקבוצה הזו.</div>;
+  if (!items.length)
+    return <div className="adminEmpty">אין נרשמים בקבוצה הזו.</div>;
 
   const statusOptions = hideWaiting
     ? [
@@ -385,9 +349,18 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
     <div className="adminTableWrap">
       <div className="adminTableTools">
         <div className="toolRow">
-          <input className="adminSearch" value={q} onChange={(e) => setQ(e.target.value)} placeholder="חיפוש: שם/טלפון/כתובת/ת.ז..." />
+          <input
+            className="adminSearch"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder='חיפוש: שם/טלפון/כתובת/ת.ז...'
+          />
 
-          <select className="adminSelect" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+          <select
+            className="adminSelect"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
             {statusOptions.map((o) => (
               <option key={o.v} value={o.v}>
                 {o.t}
@@ -395,14 +368,22 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
             ))}
           </select>
 
-          <select className="adminSelect" value={stayFilter} onChange={(e) => setStayFilter(e.target.value)}>
+          <select
+            className="adminSelect"
+            value={stayFilter}
+            onChange={(e) => setStayFilter(e.target.value)}
+          >
             <option value="all">שעה: כל השעות</option>
             <option value="14">עד 14:00</option>
             <option value="15">עד 15:00</option>
             <option value="16">עד 16:00</option>
           </select>
 
-          <select className="adminSelect" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+          <select
+            className="adminSelect"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+          >
             <option value="dateDesc">מיון: חדש → ישן</option>
             <option value="dateAsc">מיון: ישן → חדש</option>
             <option value="status">מיון: סטטוס (ממתין ראשון)</option>
@@ -412,7 +393,12 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
           <button
             className="adminBtn small"
             type="button"
-            onClick={() => downloadXLSX(`registrations-${new Date().toISOString().slice(0, 10)}.xlsx`, filtered)}
+            onClick={() =>
+              downloadXLSX(
+                `registrations-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                filtered
+              )
+            }
           >
             הורדה (Excel)
           </button>
@@ -449,15 +435,22 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
             const rowId = getRowId(x);
 
             return (
-              <tr key={rowId} className={isNew ? "rowNew" : isWaiting ? "rowWaiting" : ""}>
+              <tr
+                key={rowId}
+                className={isNew ? "rowNew" : isWaiting ? "rowWaiting" : ""}
+              >
                 <td>{x.createdAt ? formatCreatedAtIL(x.createdAt) : "-"}</td>
 
                 <td>
-                  <span className={`statusPill s-${st}`}>{STATUS_LABEL[st] || st}</span>
+                  <span className={`statusPill s-${st}`}>
+                    {STATUS_LABEL[st] || st}
+                  </span>
                 </td>
 
                 <td>{x.childFullName || "-"}</td>
-                <td className="cellDate">{formatBirthDateIL(x.birthDate) || "-"}</td>
+                <td className="cellDate">
+                  {formatBirthDateIL(x.birthDate) || "-"}
+                </td>
 
                 <td>
                   <span className={`groupPill ${groupBadgeClass(x.ageGroup)}`}>
@@ -471,18 +464,23 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
                 <td>{x.fatherName || "-"}</td>
                 <td className="cellPhone">{displayILPhone(x.fatherPhone) || "-"}</td>
 
-                <td>{x.stayUntil ? <span className={`stayPill stay-${x.stayUntil}`}>{x.stayUntil}:00</span> : "-"}</td>
+                <td>
+                  {x.stayUntil ? (
+                    <span className={`stayPill stay-${x.stayUntil}`}>
+                      {x.stayUntil}:00
+                    </span>
+                  ) : (
+                    "-"
+                  )}
+                </td>
 
                 {showReceipt ? (
                   <td>
-                    {x.receiptUrl || x.receiptUploadedAt || x.receipt ? (
+                    {x.receipt ? (
                       <button
                         className="receiptLink"
                         type="button"
-                        onClick={() => {
-                          setDetails(x);
-                          setTimeout(() => openReceiptInModal(x), 0);
-                        }}
+                        onClick={() => openReceipt(x)}
                       >
                         פתח
                       </button>
@@ -493,14 +491,7 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
                 ) : null}
 
                 <td className="actionsCell">
-                  <button
-                    className="miniBtn"
-                    type="button"
-                    onClick={() => {
-                      clearReceiptState();
-                      setDetails(x);
-                    }}
-                  >
+                  <button className="miniBtn" type="button" onClick={() => setDetails(x)}>
                     פרטים
                   </button>
 
@@ -571,7 +562,7 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
       {!filtered.length ? <div className="adminEmpty">אין תוצאות לפי הסינון.</div> : null}
 
       {details ? (
-        <div className="modalOverlay" onClick={closeDetails}>
+        <div className="modalOverlay" onClick={() => setDetails(null)}>
           <div className="modalCard" onClick={(e) => e.stopPropagation()}>
             <div className="modalHeader">
               <div className="modalTitle">
@@ -584,7 +575,7 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
                   {STATUS_LABEL[details.status || "new"] || (details.status || "new")}
                 </span>
 
-                <button className="modalClose" type="button" onClick={closeDetails}>
+                <button className="modalClose" type="button" onClick={() => setDetails(null)}>
                   ✕
                 </button>
               </div>
@@ -592,7 +583,9 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
 
             <div className="modalBody">
               <div className="chipsRow">
-                <span className={`chip ${groupBadgeClass(details.ageGroup)}`}>{AGE_LABELS[details.ageGroup] || details.ageGroup || "-"}</span>
+                <span className={`chip ${groupBadgeClass(details.ageGroup)}`}>
+                  {AGE_LABELS[details.ageGroup] || details.ageGroup || "-"}
+                </span>
                 <span className="chip pink">עד שעה: {details.stayUntil ? `${details.stayUntil}:00` : "-"}</span>
                 <span className="chip green">טל׳ אמא: {displayILPhone(details.motherPhone) || "-"}</span>
               </div>
@@ -616,14 +609,16 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
                 <div className="fieldCard">
                   <div className="fieldLabel">אמא</div>
                   <div className="fieldValue">
-                    {details.motherName || "-"} <span className="muted">({displayILPhone(details.motherPhone) || "-"})</span>
+                    {details.motherName || "-"}{" "}
+                    <span className="muted">({displayILPhone(details.motherPhone) || "-"})</span>
                   </div>
                 </div>
 
                 <div className="fieldCard">
                   <div className="fieldLabel">אבא</div>
                   <div className="fieldValue">
-                    {details.fatherName || "-"} <span className="muted">({displayILPhone(details.fatherPhone) || "-"})</span>
+                    {details.fatherName || "-"}{" "}
+                    <span className="muted">({displayILPhone(details.fatherPhone) || "-"})</span>
                   </div>
                 </div>
 
@@ -635,7 +630,11 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
                 <div className="fieldCard">
                   <div className="fieldLabel">אלרגיה</div>
                   <div className="fieldValue">
-                    {String(details.hasAllergy || "").toLowerCase() === "yes" ? <span className="valuePill ok">כן</span> : <span className="valuePill no">לא</span>}{" "}
+                    {String(details.hasAllergy || "").toLowerCase() === "yes" ? (
+                      <span className="valuePill ok">כן</span>
+                    ) : (
+                      <span className="valuePill no">לא</span>
+                    )}{" "}
                     {details.allergyDetails ? `— ${details.allergyDetails}` : ""}
                   </div>
                 </div>
@@ -643,7 +642,11 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
                 <div className="fieldCard">
                   <div className="fieldLabel">מחלה</div>
                   <div className="fieldValue">
-                    {String(details.hasDisease || "").toLowerCase() === "yes" ? <span className="valuePill warn">כן</span> : <span className="valuePill no">לא</span>}{" "}
+                    {String(details.hasDisease || "").toLowerCase() === "yes" ? (
+                      <span className="valuePill warn">כן</span>
+                    ) : (
+                      <span className="valuePill no">לא</span>
+                    )}{" "}
                     {details.diseaseDetails ? `— ${details.diseaseDetails}` : ""}
                   </div>
                 </div>
@@ -653,31 +656,13 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
                   <div className="fieldValue">{details.notes || "-"}</div>
                 </div>
 
-                {details.receiptUrl || details.receiptUploadedAt || details.receipt ? (
+                {details.receipt ? (
                   <div className="fieldCard wide">
                     <div className="fieldLabel">קבלה</div>
-
-                    <div className="fieldValue" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                        <button className="receiptLink" type="button" onClick={() => openReceiptInModal(details)}>
-                          הצג קבלה
-                        </button>
-
-                        {receiptViewUrl ? (
-                          <button className="receiptLink" type="button" onClick={clearReceiptState}>
-                            סגור קבלה
-                          </button>
-                        ) : null}
-                      </div>
-
-                      {receiptLoading ? <div className="adminEmpty">טוען קבלה...</div> : null}
-                      {receiptErr ? <div className="adminErr">{receiptErr}</div> : null}
-
-                      {receiptViewUrl ? (
-                        <div style={{ borderRadius: 14, overflow: "hidden", border: "1px solid rgba(0,0,0,0.08)" }}>
-                          <img src={receiptViewUrl} alt="receipt" style={{ width: "100%", display: "block" }} />
-                        </div>
-                      ) : null}
+                    <div className="fieldValue">
+                      <button className="receiptLink" type="button" onClick={() => openReceipt(details)}>
+                        פתח קבלה
+                      </button>
                     </div>
                   </div>
                 ) : null}
@@ -689,18 +674,30 @@ function AdminTable({ items, onRefresh, capMap, hideWaiting = false, waitingActi
                 העתק טל׳ אמא
               </button>
 
-              <button
-                className="modalBtn"
-                type="button"
-                onClick={() => window.open(waLink(details.motherPhone, `שלום, לגבי ההרשמה של ${details.childFullName || ""}`), "_blank")}
-              >
+              <button className="modalBtn" type="button" onClick={() => window.open(waLink(details.motherPhone, `שלום, לגבי ההרשמה של ${details.childFullName || ""}`), "_blank")}>
                 וואטסאפ לאמא
               </button>
 
-              <button className="modalBtn primary" type="button" onClick={closeDetails}>
+              <button className="modalBtn primary" type="button" onClick={() => setDetails(null)}>
                 סגור
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* ✅ NEW: Receipt Modal (opens in same page) */}
+      {receiptView ? (
+        <div className="modalOverlay" onClick={() => setReceiptView(null)}>
+          <div className="receiptModal" onClick={(e) => e.stopPropagation()}>
+            <div className="receiptHeader">
+              <h3>קבלה</h3>
+              <button className="modalClose" type="button" onClick={() => setReceiptView(null)}>
+                ✕
+              </button>
+            </div>
+
+            <iframe src={receiptView} title="receipt" className="receiptFrame" />
           </div>
         </div>
       ) : null}
@@ -788,7 +785,10 @@ export default function Admin() {
   const load = async () => {
     setErr("");
     try {
-      const [r1, r2] = await Promise.all([fetch(`${API_BASE}/api/registrations`), fetch(`${API_BASE}/api/capacity`)]);
+      const [r1, r2] = await Promise.all([
+        fetch(`${API_BASE}/api/registrations`),
+        fetch(`${API_BASE}/api/capacity`),
+      ]);
       if (!r1.ok) throw new Error("bad");
 
       const data = await r1.json();
@@ -895,7 +895,13 @@ export default function Admin() {
               </button>
             </div>
 
-            <AdminTable items={topItems} onRefresh={load} capMap={cap} hideWaiting={false} waitingActions={topTable === "waiting"} />
+            <AdminTable
+              items={topItems}
+              onRefresh={load}
+              capMap={cap}
+              hideWaiting={false}
+              waitingActions={topTable === "waiting"}
+            />
           </div>
         ) : null}
       </div>
