@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import * as XLSX from "xlsx";
 import "./Admin.css";
 
@@ -201,6 +202,13 @@ function AdminTable({
     }
   };
 
+  // ✅ נועל גלילה ברקע כשמודל פתוח
+  useEffect(() => {
+    const open = !!details || !!receiptView;
+    document.body.classList.toggle("modalOpen", open);
+    return () => document.body.classList.remove("modalOpen");
+  }, [details, receiptView]);
+
   const stats = useMemo(() => {
     const c = { new: 0, waiting: 0, approved: 0, rejected: 0 };
     for (const x of items) {
@@ -218,8 +226,7 @@ function AdminTable({
 
       if (hideWaiting && st === "waiting") return false;
       if (statusFilter !== "all" && st !== statusFilter) return false;
-      if (stayFilter !== "all" && String(x.stayUntil || "") !== stayFilter)
-        return false;
+      if (stayFilter !== "all" && String(x.stayUntil || "") !== stayFilter) return false;
 
       if (!qq) return true;
 
@@ -245,12 +252,9 @@ function AdminTable({
       ({ waiting: 0, new: 1, approved: 2, rejected: 3 }[s || "new"] ?? 9);
 
     return [...base].sort((a, b) => {
-      if (sortBy === "dateAsc")
-        return new Date(a.createdAt) - new Date(b.createdAt);
-      if (sortBy === "dateDesc")
-        return new Date(b.createdAt) - new Date(a.createdAt);
-      if (sortBy === "stay")
-        return Number(a.stayUntil || 99) - Number(b.stayUntil || 99);
+      if (sortBy === "dateAsc") return new Date(a.createdAt) - new Date(b.createdAt);
+      if (sortBy === "dateDesc") return new Date(b.createdAt) - new Date(a.createdAt);
+      if (sortBy === "stay") return Number(a.stayUntil || 99) - Number(b.stayUntil || 99);
       return rank(a.status) - rank(b.status);
     });
   }, [items, statusFilter, stayFilter, sortBy, q, hideWaiting]);
@@ -258,20 +262,15 @@ function AdminTable({
   const setStatusAndNotify = async (x, status) => {
     try {
       const id = getRowId(x);
-      const res = await fetch(
-        `${API_BASE}/api/registrations/${encodeURIComponent(id)}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status }),
-        }
-      );
+      const res = await fetch(`${API_BASE}/api/registrations/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
 
       const data = await res.json().catch(() => ({}));
-
       if (!res.ok) {
-        const msg = data?.message || data?.error || "שגיאה בעדכון סטטוס";
-        alert(msg);
+        alert(data?.message || data?.error || "שגיאה בעדכון סטטוס");
         return;
       }
 
@@ -298,7 +297,6 @@ function AdminTable({
           : "";
 
       if (link) window.open(link, "_blank");
-
       onRefresh();
     } catch {
       alert("בעיה בחיבור לשרת");
@@ -309,9 +307,7 @@ function AdminTable({
     const id = getRowId(x);
     if (!id) return;
     if (!window.confirm("בטוחה למחוק?")) return;
-    await fetch(`${API_BASE}/api/registrations/${encodeURIComponent(id)}`, {
-      method: "DELETE",
-    });
+    await fetch(`${API_BASE}/api/registrations/${encodeURIComponent(id)}`, { method: "DELETE" });
     onRefresh();
   };
 
@@ -329,29 +325,24 @@ function AdminTable({
   const addFromWaiting = async (x) => {
     try {
       const id = getRowId(x);
-      const res = await fetch(
-        `${API_BASE}/api/registrations/${encodeURIComponent(id)}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "new" }),
-        }
-      );
+      const res = await fetch(`${API_BASE}/api/registrations/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "new" }),
+      });
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         alert(data?.message || data?.error || "שגיאה בהוספה מרשימת המתנה");
         return;
       }
-
       onRefresh();
     } catch {
       alert("בעיה בחיבור לשרת");
     }
   };
 
-  if (!items.length)
-    return <div className="adminEmpty">אין נרשמים בקבוצה הזו.</div>;
+  if (!items.length) return <div className="adminEmpty">אין נרשמים בקבוצה הזו.</div>;
 
   const statusOptions = hideWaiting
     ? [
@@ -367,6 +358,196 @@ function AdminTable({
         { v: "approved", t: `מאושר (${stats.approved || 0})` },
         { v: "rejected", t: `נדחה (${stats.rejected || 0})` },
       ];
+
+  const rowModalDetails =
+    details &&
+    createPortal(
+      <div className="modalOverlay" onClick={() => setDetails(null)}>
+        <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+          <div className="modalHeader">
+            <div className="modalTitle">
+              <h3>פרטי הרשמה</h3>
+              <small>{details.createdAt ? formatCreatedAtIL(details.createdAt) : ""}</small>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span className={`statusPill s-${details.status || "new"}`}>
+                {STATUS_LABEL[details.status || "new"] || (details.status || "new")}
+              </span>
+
+              <button className="modalClose" type="button" onClick={() => setDetails(null)}>
+                ✕
+              </button>
+            </div>
+          </div>
+
+          <div className="modalBody">
+            <div className="chipsRow">
+              <span className={`chip ${groupBadgeClass(details.ageGroup)}`}>
+                {AGE_LABELS[details.ageGroup] || details.ageGroup || "-"}
+              </span>
+              <span className="chip pink">
+                עד שעה: {details.stayUntil ? `${details.stayUntil}:00` : "-"}
+              </span>
+              <span className="chip green">
+                טל׳ אמא: {displayILPhone(details.motherPhone) || "-"}
+              </span>
+            </div>
+
+            <div className="modalGrid">
+              <div className="fieldCard">
+                <div className="fieldLabel">שם הילד</div>
+                <div className="fieldValue">{details.childFullName || "-"}</div>
+              </div>
+
+              <div className="fieldCard">
+                <div className="fieldLabel">תאריך לידה</div>
+                <div className="fieldValue">
+                  <span className="ltr">{formatBirthDateIL(details.birthDate) || "-"}</span>
+                </div>
+              </div>
+
+              <div className="fieldCard">
+                <div className="fieldLabel">ת.ז ילד</div>
+                <div className="fieldValue">
+                  <span className="ltr">{details.childId || "-"}</span>
+                </div>
+              </div>
+
+              <div className="fieldCard">
+                <div className="fieldLabel">אמא</div>
+                <div className="fieldValue">
+                  {details.motherName || "-"}{" "}
+                  <span className="muted">
+                    (<span className="ltr">{displayILPhone(details.motherPhone) || "-"}</span>)
+                  </span>
+                </div>
+              </div>
+
+              <div className="fieldCard">
+                <div className="fieldLabel">אבא</div>
+                <div className="fieldValue">
+                  {details.fatherName || "-"}{" "}
+                  <span className="muted">
+                    (<span className="ltr">{displayILPhone(details.fatherPhone) || "-"}</span>)
+                  </span>
+                </div>
+              </div>
+
+              <div className="fieldCard wide">
+                <div className="fieldLabel">כתובת</div>
+                <div className="fieldValue">{details.address || "-"}</div>
+              </div>
+
+              <div className="fieldCard">
+                <div className="fieldLabel">אלרגיה</div>
+                <div className="fieldValue">
+                  {String(details.hasAllergy || "").toLowerCase() === "yes" ? (
+                    <span className="valuePill ok">כן</span>
+                  ) : (
+                    <span className="valuePill no">לא</span>
+                  )}{" "}
+                  {details.allergyDetails ? `— ${details.allergyDetails}` : ""}
+                </div>
+              </div>
+
+              <div className="fieldCard">
+                <div className="fieldLabel">מחלה</div>
+                <div className="fieldValue">
+                  {String(details.hasDisease || "").toLowerCase() === "yes" ? (
+                    <span className="valuePill warn">כן</span>
+                  ) : (
+                    <span className="valuePill no">לא</span>
+                  )}{" "}
+                  {details.diseaseDetails ? `— ${details.diseaseDetails}` : ""}
+                </div>
+              </div>
+
+              <div className="fieldCard wide">
+                <div className="fieldLabel">הערות</div>
+                <div className="fieldValue">{details.notes || "-"}</div>
+              </div>
+
+              {details.hasReceipt ? (
+                <div className="fieldCard wide">
+                  <div className="fieldLabel">קבלה</div>
+                  <div className="fieldValue">
+                    <button className="receiptLink" type="button" onClick={() => openReceipt(details)}>
+                      פתח קבלה
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="modalActions">
+            <button
+              className="modalBtn"
+              type="button"
+              onClick={() =>
+                navigator.clipboard.writeText(displayILPhone(details.motherPhone || ""))
+              }
+            >
+              העתק טל׳ אמא
+            </button>
+
+            <button
+              className="modalBtn"
+              type="button"
+              onClick={() =>
+                window.open(
+                  waLink(details.motherPhone, `שלום, לגבי ההרשמה של ${details.childFullName || ""}`),
+                  "_blank"
+                )
+              }
+            >
+              וואטסאפ לאמא
+            </button>
+
+            <button className="modalBtn primary" type="button" onClick={() => setDetails(null)}>
+              סגור
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+
+  const rowModalReceipt =
+    receiptView &&
+    createPortal(
+      <div className="modalOverlay" onClick={closeReceipt}>
+        <div className="receiptModal" onClick={(e) => e.stopPropagation()}>
+          <div className="receiptHeader">
+            <h3>קבלה</h3>
+
+            <div className="receiptHeaderBtns">
+              <button
+                className="receiptMini"
+                type="button"
+                onClick={() => window.open(receiptView.url, "_blank")}
+              >
+                פתח בדף
+              </button>
+
+              <button className="modalClose" type="button" onClick={closeReceipt}>
+                ✕
+              </button>
+            </div>
+          </div>
+
+          <div className="receiptBody">
+            {receiptView.type.includes("pdf") ? (
+              <iframe className="receiptFrame" src={receiptView.url} title="receipt" />
+            ) : (
+              <img className="receiptImage" src={receiptView.url} alt="receipt" />
+            )}
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
 
   return (
     <div className="adminTableWrap">
@@ -413,18 +594,7 @@ function AdminTable({
             <option value="stay">מיון: שעה (14 לפני 16)</option>
           </select>
 
-          <button
-            className="adminBtn small"
-            type="button"
-            onClick={() =>
-              downloadXLSX(
-                `registrations-${new Date().toISOString().slice(0, 10)}.xlsx`,
-                filtered
-              )
-            }
-          >
-            הורדה (Excel)
-          </button>
+          {/* ✅ נמחק כפתור Excel ליד המיון */}
         </div>
       </div>
 
@@ -458,16 +628,11 @@ function AdminTable({
             const rowId = getRowId(x);
 
             return (
-              <tr
-                key={rowId}
-                className={isNew ? "rowNew" : isWaiting ? "rowWaiting" : ""}
-              >
+              <tr key={rowId} className={isNew ? "rowNew" : isWaiting ? "rowWaiting" : ""}>
                 <td>{x.createdAt ? formatCreatedAtIL(x.createdAt) : "-"}</td>
 
                 <td>
-                  <span className={`statusPill s-${st}`}>
-                    {STATUS_LABEL[st] || st}
-                  </span>
+                  <span className={`statusPill s-${st}`}>{STATUS_LABEL[st] || st}</span>
                 </td>
 
                 <td>{x.childFullName || "-"}</td>
@@ -488,9 +653,7 @@ function AdminTable({
 
                 <td>
                   {x.stayUntil ? (
-                    <span className={`stayPill stay-${x.stayUntil}`}>
-                      {x.stayUntil}:00
-                    </span>
+                    <span className={`stayPill stay-${x.stayUntil}`}>{x.stayUntil}:00</span>
                   ) : (
                     "-"
                   )}
@@ -499,11 +662,7 @@ function AdminTable({
                 {showReceipt ? (
                   <td>
                     {x.hasReceipt ? (
-                      <button
-                        className="receiptLink"
-                        type="button"
-                        onClick={() => openReceipt(x)}
-                      >
+                      <button className="receiptLink" type="button" onClick={() => openReceipt(x)}>
                         פתח
                       </button>
                     ) : (
@@ -546,12 +705,7 @@ function AdminTable({
                         💬 וואטסאפ
                       </button>
 
-                      <button
-                        className="miniBtn ok"
-                        type="button"
-                        title="הוספה מהמתנה"
-                        onClick={() => addFromWaiting(x)}
-                      >
+                      <button className="miniBtn ok" type="button" title="הוספה מהמתנה" onClick={() => addFromWaiting(x)}>
                         ➕ הוספה
                       </button>
                     </>
@@ -559,11 +713,7 @@ function AdminTable({
 
                   {st === "new" ? (
                     <>
-                      <button
-                        className="miniBtn okBright"
-                        type="button"
-                        onClick={() => setStatusAndNotify(x, "approved")}
-                      >
+                      <button className="miniBtn okBright" type="button" onClick={() => setStatusAndNotify(x, "approved")}>
                         מאושר
                       </button>
 
@@ -592,187 +742,9 @@ function AdminTable({
 
       {!filtered.length ? <div className="adminEmpty">אין תוצאות לפי הסינון.</div> : null}
 
-      {/* Details Modal */}
-      {details ? (
-        <div className="modalOverlay" onClick={() => setDetails(null)}>
-          <div className="modalCard" onClick={(e) => e.stopPropagation()}>
-            <div className="modalHeader">
-              <div className="modalTitle">
-                <h3>פרטי הרשמה</h3>
-                <small>{details.createdAt ? formatCreatedAtIL(details.createdAt) : ""}</small>
-              </div>
-
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span className={`statusPill s-${details.status || "new"}`}>
-                  {STATUS_LABEL[details.status || "new"] || (details.status || "new")}
-                </span>
-
-                <button className="modalClose" type="button" onClick={() => setDetails(null)}>
-                  ✕
-                </button>
-              </div>
-            </div>
-
-            <div className="modalBody">
-              <div className="chipsRow">
-                <span className={`chip ${groupBadgeClass(details.ageGroup)}`}>
-                  {AGE_LABELS[details.ageGroup] || details.ageGroup || "-"}
-                </span>
-                <span className="chip pink">
-                  עד שעה: {details.stayUntil ? `${details.stayUntil}:00` : "-"}
-                </span>
-                <span className="chip green">
-                  טל׳ אמא: {displayILPhone(details.motherPhone) || "-"}
-                </span>
-              </div>
-
-              <div className="modalGrid">
-                <div className="fieldCard">
-                  <div className="fieldLabel">שם הילד</div>
-                  <div className="fieldValue">{details.childFullName || "-"}</div>
-                </div>
-
-           <div className="fieldCard">
-  <div className="fieldLabel">תאריך לידה</div>
-  <div className="fieldValue">
-    <span className="ltr">
-      {formatBirthDateIL(details.birthDate) || "-"}
-    </span>
-  </div>
-</div>
-
-<div className="fieldCard">
-  <div className="fieldLabel">ת.ז ילד</div>
-  <div className="fieldValue">
-    <span className="ltr">{details.childId || "-"}</span>
-  </div>
-</div>
-
-<div className="fieldCard">
-  <div className="fieldLabel">אמא</div>
-  <div className="fieldValue">
-    {details.motherName || "-"}{" "}
-    <span className="muted">
-      (<span className="ltr">{displayILPhone(details.motherPhone) || "-"}</span>)
-    </span>
-  </div>
-</div>
-
-<div className="fieldCard">
-  <div className="fieldLabel">אבא</div>
-  <div className="fieldValue">
-    {details.fatherName || "-"}{" "}
-    <span className="muted">
-      (<span className="ltr">{displayILPhone(details.fatherPhone) || "-"}</span>)
-    </span>
-  </div>
-</div>
-
-                <div className="fieldCard wide">
-                  <div className="fieldLabel">כתובת</div>
-                  <div className="fieldValue">{details.address || "-"}</div>
-                </div>
-
-                <div className="fieldCard">
-                  <div className="fieldLabel">אלרגיה</div>
-                  <div className="fieldValue">
-                    {String(details.hasAllergy || "").toLowerCase() === "yes" ? (
-                      <span className="valuePill ok">כן</span>
-                    ) : (
-                      <span className="valuePill no">לא</span>
-                    )}{" "}
-                    {details.allergyDetails ? `— ${details.allergyDetails}` : ""}
-                  </div>
-                </div>
-
-                <div className="fieldCard">
-                  <div className="fieldLabel">מחלה</div>
-                  <div className="fieldValue">
-                    {String(details.hasDisease || "").toLowerCase() === "yes" ? (
-                      <span className="valuePill warn">כן</span>
-                    ) : (
-                      <span className="valuePill no">לא</span>
-                    )}{" "}
-                    {details.diseaseDetails ? `— ${details.diseaseDetails}` : ""}
-                  </div>
-                </div>
-
-                <div className="fieldCard wide">
-                  <div className="fieldLabel">הערות</div>
-                  <div className="fieldValue">{details.notes || "-"}</div>
-                </div>
-
-                {details.hasReceipt ? (
-                  <div className="fieldCard wide">
-                    <div className="fieldLabel">קבלה</div>
-                    <div className="fieldValue">
-                      <button className="receiptLink" type="button" onClick={() => openReceipt(details)}>
-                        פתח קבלה
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="modalActions">
-              <button
-                className="modalBtn"
-                type="button"
-                onClick={() => navigator.clipboard.writeText(displayILPhone(details.motherPhone || ""))}
-              >
-                העתק טל׳ אמא
-              </button>
-
-              <button
-                className="modalBtn"
-                type="button"
-                onClick={() =>
-                  window.open(
-                    waLink(details.motherPhone, `שלום, לגבי ההרשמה של ${details.childFullName || ""}`),
-                    "_blank"
-                  )
-                }
-              >
-                וואטסאפ לאמא
-              </button>
-
-              <button className="modalBtn primary" type="button" onClick={() => setDetails(null)}>
-                סגור
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {/* Receipt Modal */}
-      {receiptView ? (
-        <div className="modalOverlay" onClick={closeReceipt}>
-          <div className="receiptModal" onClick={(e) => e.stopPropagation()}>
-            <div className="receiptHeader">
-              <h3>קבלה</h3>
-
-              <div className="receiptHeaderBtns">
-                <button className="receiptMini" type="button" onClick={() => window.open(receiptView.url, "_blank")}>
-                  פתח בדף
-                </button>
-
-                <button className="modalClose" type="button" onClick={closeReceipt}>
-                  ✕
-                </button>
-              </div>
-            </div>
-
-            <div className="receiptBody">
-              {receiptView.type.includes("pdf") ? (
-                <iframe className="receiptFrame" src={receiptView.url} title="receipt" />
-              ) : (
-                <img className="receiptImage" src={receiptView.url} alt="receipt" />
-              )}
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {/* ✅ מודלים בפורטל כדי להיות על כל הדף */}
+      {rowModalDetails}
+      {rowModalReceipt}
     </div>
   );
 }
@@ -887,13 +859,7 @@ export default function Admin() {
   }, []);
 
   const grouped = useMemo(() => {
-    const map = {
-      "6m-1y": [],
-      "1y-1.5y": [],
-      "1.5y-2y": [],
-      "2y-3y": [],
-      other: [],
-    };
+    const map = { "6m-1y": [], "1y-1.5y": [], "1.5y-2y": [], "2y-3y": [], other: [] };
     for (const x of items) {
       const g = x.ageGroup;
       if (map[g]) map[g].push(x);

@@ -688,3 +688,8 @@ body{
   .fieldCard{ min-height: 84px; }
   .modalActions .modalBtn{ flex: 1 1 100%; }
 }
+
+/* ✅ כשמודל פתוח – לא מאפשר גלילה ברקע */
+body.modalOpen{
+  overflow: hidden;
+}
