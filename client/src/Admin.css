@@ -703,3 +703,41 @@ body{
     min-width: 860px;
   }
 }
+
+.modalOverlay{
+  z-index: 100000; /* חשוב */
+}
+
+.receiptHeaderBtns{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+.receiptMini{
+  height:44px;
+  padding:0 12px;
+  border-radius:14px;
+  border:1px solid rgba(0,0,0,.08);
+  background: rgba(0,0,0,.05);
+  font-weight:1000;
+  cursor:pointer;
+}
+
+.modalOverlay { z-index: 100000; }
+
+.receiptHeaderBtns{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+.receiptMini{
+  height:44px;
+  padding:0 12px;
+  border-radius:14px;
+  border:1px solid rgba(0,0,0,.08);
+  background: rgba(0,0,0,.05);
+  font-weight:1000;
+  cursor:pointer;
+}

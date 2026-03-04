@@ -1,9 +1,15 @@
 import React, { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import "./Admin.css";
+import { createPortal } from "react-dom";
 
 const API_BASE =
   import.meta.env.VITE_API_BASE || "https://rodat-almalak-alsaghir.onrender.com";
+
+/* ✅ Portal מחוץ לרנדר (פותרים ESLint) */
+function Portal({ children }) {
+  return createPortal(children, document.body);
+}
 
 const AGE_LABELS = {
   "6m-1y": "6 أشهر - سنة",
@@ -169,17 +175,15 @@ function AdminTable({
   const [q, setQ] = useState("");
   const [details, setDetails] = useState(null);
 
-  // ✅ NEW: receipt modal
   const [receiptView, setReceiptView] = useState(null);
 
   const showReceipt = !waitingActions;
 
-  // ✅ קבלה במודאל בתוך האתר
-  function openReceipt(x) {
+  const openReceipt = (x) => {
     const id = getRowId(x);
     if (!id) return;
     setReceiptView(receiptLinkById(id));
-  }
+  };
 
   const stats = useMemo(() => {
     const c = { new: 0, waiting: 0, approved: 0, rejected: 0 };
@@ -353,7 +357,7 @@ function AdminTable({
             className="adminSearch"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder='חיפוש: שם/טלפון/כתובת/ת.ז...'
+            placeholder="חיפוש: שם/טלפון/כתובת/ת.ז..."
           />
 
           <select
@@ -460,9 +464,13 @@ function AdminTable({
                 </td>
 
                 <td>{x.motherName || "-"}</td>
-                <td className="cellPhone">{displayILPhone(x.motherPhone) || "-"}</td>
+                <td className="cellPhone">
+                  {displayILPhone(x.motherPhone) || "-"}
+                </td>
                 <td>{x.fatherName || "-"}</td>
-                <td className="cellPhone">{displayILPhone(x.fatherPhone) || "-"}</td>
+                <td className="cellPhone">
+                  {displayILPhone(x.fatherPhone) || "-"}
+                </td>
 
                 <td>
                   {x.stayUntil ? (
@@ -491,7 +499,11 @@ function AdminTable({
                 ) : null}
 
                 <td className="actionsCell">
-                  <button className="miniBtn" type="button" onClick={() => setDetails(x)}>
+                  <button
+                    className="miniBtn"
+                    type="button"
+                    onClick={() => setDetails(x)}
+                  >
                     פרטים
                   </button>
 
@@ -501,7 +513,11 @@ function AdminTable({
                         className="miniBtn ok"
                         type="button"
                         disabled={!hasPlace}
-                        title={hasPlace ? "שליחת הודעה לאמא" : "אין מקום בקבוצה כרגע"}
+                        title={
+                          hasPlace
+                            ? "שליחת הודעה לאמא"
+                            : "אין מקום בקבוצה כרגע"
+                        }
                         onClick={() => sendPlaceMsgToWaiting(x)}
                       >
                         🟢 התפנה מקום
@@ -515,7 +531,9 @@ function AdminTable({
                           window.open(
                             waLink(
                               x.motherPhone,
-                              `🌸 روضة الملاك الصغير\n\nأصبح هناك مكان متاح الآن.\nهل ما زلتم ترغبون بتسجيل الطفل ${x.childFullName || ""} ؟`
+                              `🌸 روضة الملاك الصغير\n\nأصبح هناك مكان متاح الآن.\nهل ما زلتم ترغبون بتسجيل الطفل ${
+                                x.childFullName || ""
+                              } ؟`
                             ),
                             "_blank"
                           )
@@ -524,7 +542,12 @@ function AdminTable({
                         💬 וואטסאפ
                       </button>
 
-                      <button className="miniBtn ok" type="button" title="הוספה מהמתנה" onClick={() => addFromWaiting(x)}>
+                      <button
+                        className="miniBtn ok"
+                        type="button"
+                        title="הוספה מהמתנה"
+                        onClick={() => addFromWaiting(x)}
+                      >
                         ➕ הוספה
                       </button>
                     </>
@@ -532,7 +555,11 @@ function AdminTable({
 
                   {st === "new" ? (
                     <>
-                      <button className="miniBtn okBright" type="button" onClick={() => setStatusAndNotify(x, "approved")}>
+                      <button
+                        className="miniBtn okBright"
+                        type="button"
+                        onClick={() => setStatusAndNotify(x, "approved")}
+                      >
                         מאושר
                       </button>
 
@@ -549,7 +576,11 @@ function AdminTable({
                     </>
                   ) : null}
 
-                  <button className="miniBtn danger" type="button" onClick={() => del(x)}>
+                  <button
+                    className="miniBtn danger"
+                    type="button"
+                    onClick={() => del(x)}
+                  >
                     מחיקה
                   </button>
                 </td>
@@ -559,147 +590,220 @@ function AdminTable({
         </tbody>
       </table>
 
-      {!filtered.length ? <div className="adminEmpty">אין תוצאות לפי הסינון.</div> : null}
+      {!filtered.length ? (
+        <div className="adminEmpty">אין תוצאות לפי הסינון.</div>
+      ) : null}
 
+      {/* ✅ Details Modal */}
       {details ? (
-        <div className="modalOverlay" onClick={() => setDetails(null)}>
-          <div className="modalCard" onClick={(e) => e.stopPropagation()}>
-            <div className="modalHeader">
-              <div className="modalTitle">
-                <h3>פרטי הרשמה</h3>
-                <small>{details.createdAt ? formatCreatedAtIL(details.createdAt) : ""}</small>
+        <Portal>
+          <div className="modalOverlay" onClick={() => setDetails(null)}>
+            <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+              <div className="modalHeader">
+                <div className="modalTitle">
+                  <h3>פרטי הרשמה</h3>
+                  <small>
+                    {details.createdAt ? formatCreatedAtIL(details.createdAt) : ""}
+                  </small>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span className={`statusPill s-${details.status || "new"}`}>
+                    {STATUS_LABEL[details.status || "new"] ||
+                      (details.status || "new")}
+                  </span>
+
+                  <button
+                    className="modalClose"
+                    type="button"
+                    onClick={() => setDetails(null)}
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span className={`statusPill s-${details.status || "new"}`}>
-                  {STATUS_LABEL[details.status || "new"] || (details.status || "new")}
-                </span>
+              <div className="modalBody">
+                <div className="chipsRow">
+                  <span className={`chip ${groupBadgeClass(details.ageGroup)}`}>
+                    {AGE_LABELS[details.ageGroup] || details.ageGroup || "-"}
+                  </span>
+                  <span className="chip pink">
+                    עד שעה: {details.stayUntil ? `${details.stayUntil}:00` : "-"}
+                  </span>
+                  <span className="chip green">
+                    טל׳ אמא: {displayILPhone(details.motherPhone) || "-"}
+                  </span>
+                </div>
 
-                <button className="modalClose" type="button" onClick={() => setDetails(null)}>
-                  ✕
+                <div className="modalGrid">
+                  <div className="fieldCard">
+                    <div className="fieldLabel">שם הילד</div>
+                    <div className="fieldValue">
+                      {details.childFullName || "-"}
+                    </div>
+                  </div>
+
+                  <div className="fieldCard">
+                    <div className="fieldLabel">תאריך לידה</div>
+                    <div className="fieldValue">
+                      {formatBirthDateIL(details.birthDate) || "-"}
+                    </div>
+                  </div>
+
+                  <div className="fieldCard">
+                    <div className="fieldLabel">ת.ז ילד</div>
+                    <div className="fieldValue">{details.childId || "-"}</div>
+                  </div>
+
+                  <div className="fieldCard">
+                    <div className="fieldLabel">אמא</div>
+                    <div className="fieldValue">
+                      {details.motherName || "-"}{" "}
+                      <span className="muted">
+                        ({displayILPhone(details.motherPhone) || "-"})
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="fieldCard">
+                    <div className="fieldLabel">אבא</div>
+                    <div className="fieldValue">
+                      {details.fatherName || "-"}{" "}
+                      <span className="muted">
+                        ({displayILPhone(details.fatherPhone) || "-"})
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="fieldCard wide">
+                    <div className="fieldLabel">כתובת</div>
+                    <div className="fieldValue">{details.address || "-"}</div>
+                  </div>
+
+                  <div className="fieldCard">
+                    <div className="fieldLabel">אלרגיה</div>
+                    <div className="fieldValue">
+                      {String(details.hasAllergy || "").toLowerCase() === "yes" ? (
+                        <span className="valuePill ok">כן</span>
+                      ) : (
+                        <span className="valuePill no">לא</span>
+                      )}{" "}
+                      {details.allergyDetails ? `— ${details.allergyDetails}` : ""}
+                    </div>
+                  </div>
+
+                  <div className="fieldCard">
+                    <div className="fieldLabel">מחלה</div>
+                    <div className="fieldValue">
+                      {String(details.hasDisease || "").toLowerCase() === "yes" ? (
+                        <span className="valuePill warn">כן</span>
+                      ) : (
+                        <span className="valuePill no">לא</span>
+                      )}{" "}
+                      {details.diseaseDetails ? `— ${details.diseaseDetails}` : ""}
+                    </div>
+                  </div>
+
+                  <div className="fieldCard wide">
+                    <div className="fieldLabel">הערות</div>
+                    <div className="fieldValue">{details.notes || "-"}</div>
+                  </div>
+
+                  {details.receipt ? (
+                    <div className="fieldCard wide">
+                      <div className="fieldLabel">קבלה</div>
+                      <div className="fieldValue">
+                        <button
+                          className="receiptLink"
+                          type="button"
+                          onClick={() => openReceipt(details)}
+                        >
+                          פתח קבלה
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="modalActions">
+                <button
+                  className="modalBtn"
+                  type="button"
+                  onClick={() =>
+                    navigator.clipboard.writeText(
+                      displayILPhone(details.motherPhone || "")
+                    )
+                  }
+                >
+                  העתק טל׳ אמא
+                </button>
+
+                <button
+                  className="modalBtn"
+                  type="button"
+                  onClick={() =>
+                    window.open(
+                      waLink(
+                        details.motherPhone,
+                        `שלום, לגבי ההרשמה של ${details.childFullName || ""}`
+                      ),
+                      "_blank"
+                    )
+                  }
+                >
+                  וואטסאפ לאמא
+                </button>
+
+                <button
+                  className="modalBtn primary"
+                  type="button"
+                  onClick={() => setDetails(null)}
+                >
+                  סגור
                 </button>
               </div>
             </div>
-
-            <div className="modalBody">
-              <div className="chipsRow">
-                <span className={`chip ${groupBadgeClass(details.ageGroup)}`}>
-                  {AGE_LABELS[details.ageGroup] || details.ageGroup || "-"}
-                </span>
-                <span className="chip pink">עד שעה: {details.stayUntil ? `${details.stayUntil}:00` : "-"}</span>
-                <span className="chip green">טל׳ אמא: {displayILPhone(details.motherPhone) || "-"}</span>
-              </div>
-
-              <div className="modalGrid">
-                <div className="fieldCard">
-                  <div className="fieldLabel">שם הילד</div>
-                  <div className="fieldValue">{details.childFullName || "-"}</div>
-                </div>
-
-                <div className="fieldCard">
-                  <div className="fieldLabel">תאריך לידה</div>
-                  <div className="fieldValue">{formatBirthDateIL(details.birthDate) || "-"}</div>
-                </div>
-
-                <div className="fieldCard">
-                  <div className="fieldLabel">ת.ז ילד</div>
-                  <div className="fieldValue">{details.childId || "-"}</div>
-                </div>
-
-                <div className="fieldCard">
-                  <div className="fieldLabel">אמא</div>
-                  <div className="fieldValue">
-                    {details.motherName || "-"}{" "}
-                    <span className="muted">({displayILPhone(details.motherPhone) || "-"})</span>
-                  </div>
-                </div>
-
-                <div className="fieldCard">
-                  <div className="fieldLabel">אבא</div>
-                  <div className="fieldValue">
-                    {details.fatherName || "-"}{" "}
-                    <span className="muted">({displayILPhone(details.fatherPhone) || "-"})</span>
-                  </div>
-                </div>
-
-                <div className="fieldCard wide">
-                  <div className="fieldLabel">כתובת</div>
-                  <div className="fieldValue">{details.address || "-"}</div>
-                </div>
-
-                <div className="fieldCard">
-                  <div className="fieldLabel">אלרגיה</div>
-                  <div className="fieldValue">
-                    {String(details.hasAllergy || "").toLowerCase() === "yes" ? (
-                      <span className="valuePill ok">כן</span>
-                    ) : (
-                      <span className="valuePill no">לא</span>
-                    )}{" "}
-                    {details.allergyDetails ? `— ${details.allergyDetails}` : ""}
-                  </div>
-                </div>
-
-                <div className="fieldCard">
-                  <div className="fieldLabel">מחלה</div>
-                  <div className="fieldValue">
-                    {String(details.hasDisease || "").toLowerCase() === "yes" ? (
-                      <span className="valuePill warn">כן</span>
-                    ) : (
-                      <span className="valuePill no">לא</span>
-                    )}{" "}
-                    {details.diseaseDetails ? `— ${details.diseaseDetails}` : ""}
-                  </div>
-                </div>
-
-                <div className="fieldCard wide">
-                  <div className="fieldLabel">הערות</div>
-                  <div className="fieldValue">{details.notes || "-"}</div>
-                </div>
-
-                {details.receipt ? (
-                  <div className="fieldCard wide">
-                    <div className="fieldLabel">קבלה</div>
-                    <div className="fieldValue">
-                      <button className="receiptLink" type="button" onClick={() => openReceipt(details)}>
-                        פתח קבלה
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="modalActions">
-              <button className="modalBtn" type="button" onClick={() => navigator.clipboard.writeText(displayILPhone(details.motherPhone || ""))}>
-                העתק טל׳ אמא
-              </button>
-
-              <button className="modalBtn" type="button" onClick={() => window.open(waLink(details.motherPhone, `שלום, לגבי ההרשמה של ${details.childFullName || ""}`), "_blank")}>
-                וואטסאפ לאמא
-              </button>
-
-              <button className="modalBtn primary" type="button" onClick={() => setDetails(null)}>
-                סגור
-              </button>
-            </div>
           </div>
-        </div>
+        </Portal>
       ) : null}
 
-      {/* ✅ NEW: Receipt Modal (opens in same page) */}
+      {/* ✅ Receipt Modal (same tab) */}
       {receiptView ? (
-        <div className="modalOverlay" onClick={() => setReceiptView(null)}>
-          <div className="receiptModal" onClick={(e) => e.stopPropagation()}>
-            <div className="receiptHeader">
-              <h3>קבלה</h3>
-              <button className="modalClose" type="button" onClick={() => setReceiptView(null)}>
-                ✕
-              </button>
-            </div>
+        <Portal>
+          <div className="modalOverlay" onClick={() => setReceiptView(null)}>
+            <div className="receiptModal" onClick={(e) => e.stopPropagation()}>
+              <div className="receiptHeader">
+                <h3>קבלה</h3>
+                <div className="receiptHeaderBtns">
+                  <button
+                    className="receiptMini"
+                    type="button"
+                    onClick={() => {
+                      window.location.href = receiptView;
+                    }}
+                  >
+                    פתח בדף
+                  </button>
+                  <button
+                    className="modalClose"
+                    type="button"
+                    onClick={() => setReceiptView(null)}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
 
-            <iframe src={receiptView} title="receipt" className="receiptFrame" />
+              <iframe
+                src={receiptView}
+                title="receipt"
+                className="receiptFrame"
+              />
+            </div>
           </div>
-        </div>
+        </Portal>
       ) : null}
     </div>
   );
@@ -708,13 +812,20 @@ function AdminTable({
 /* =================== Group Card =================== */
 
 function GroupCard({ title, items, onRefresh, isOpen, onToggle }) {
-  const occupied = items.filter((x) => ["new", "approved"].includes(x.status || "new")).length;
+  const occupied = items.filter((x) =>
+    ["new", "approved"].includes(x.status || "new")
+  ).length;
   const rejected = items.filter((x) => (x.status || "new") === "rejected").length;
   const hasNew = items.some((x) => (x.status || "new") === "new");
 
   return (
     <div className={`groupCard ${isOpen ? "open" : "closed"}`}>
-      <button className="groupHead" type="button" onClick={onToggle} aria-expanded={isOpen}>
+      <button
+        className="groupHead"
+        type="button"
+        onClick={onToggle}
+        aria-expanded={isOpen}
+      >
         <div className="groupHeadRight">
           <div className="groupTitle">
             {title}
@@ -735,7 +846,10 @@ function GroupCard({ title, items, onRefresh, isOpen, onToggle }) {
             className="adminBtn small"
             onClick={(e) => {
               e.stopPropagation();
-              downloadXLSX(`registrations-${title}-${new Date().toISOString().slice(0, 10)}.xlsx`, items);
+              downloadXLSX(
+                `registrations-${title}-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                items
+              );
             }}
           >
             הורדה (Excel)
@@ -746,7 +860,12 @@ function GroupCard({ title, items, onRefresh, isOpen, onToggle }) {
       </button>
 
       <div className="groupBody">
-        <AdminTable items={items} onRefresh={onRefresh} hideWaiting={true} waitingActions={false} />
+        <AdminTable
+          items={items}
+          onRefresh={onRefresh}
+          hideWaiting={true}
+          waitingActions={false}
+        />
       </div>
     </div>
   );
@@ -812,7 +931,13 @@ export default function Admin() {
   }, []);
 
   const grouped = useMemo(() => {
-    const map = { "6m-1y": [], "1y-1.5y": [], "1.5y-2y": [], "2y-3y": [], other: [] };
+    const map = {
+      "6m-1y": [],
+      "1y-1.5y": [],
+      "1.5y-2y": [],
+      "2y-3y": [],
+      other: [],
+    };
     for (const x of items) {
       const g = x.ageGroup;
       if (map[g]) map[g].push(x);
@@ -822,7 +947,10 @@ export default function Admin() {
   }, [items]);
 
   const downloadAll = () => {
-    downloadXLSX(`registrations-${new Date().toISOString().slice(0, 10)}.xlsx`, items);
+    downloadXLSX(
+      `registrations-${new Date().toISOString().slice(0, 10)}.xlsx`,
+      items
+    );
   };
 
   const newTotal = items.filter((x) => (x.status || "new") === "new").length;
@@ -845,19 +973,39 @@ export default function Admin() {
           <h2 className="adminH2">لوحة الإدارة — التسجيلات</h2>
 
           <div className="adminPills">
-            <button type="button" className="pill pillBtn" onClick={() => toggleTop("all")}>
+            <button
+              type="button"
+              className="pill pillBtn"
+              onClick={() => toggleTop("all")}
+            >
               סה״כ: {items.length}
             </button>
-            <button type="button" className="pill green pillBtn" onClick={() => toggleTop("new")}>
+            <button
+              type="button"
+              className="pill green pillBtn"
+              onClick={() => toggleTop("new")}
+            >
               חדש: {newTotal}
             </button>
-            <button type="button" className="pill yellow pillBtn" onClick={() => toggleTop("waiting")}>
+            <button
+              type="button"
+              className="pill yellow pillBtn"
+              onClick={() => toggleTop("waiting")}
+            >
               ממתין: {waitingTotal}
             </button>
-            <button type="button" className="pill blue pillBtn" onClick={() => toggleTop("approved")}>
+            <button
+              type="button"
+              className="pill blue pillBtn"
+              onClick={() => toggleTop("approved")}
+            >
               מאושר: {approvedTotal}
             </button>
-            <button type="button" className="pill red pillBtn" onClick={() => toggleTop("rejected")}>
+            <button
+              type="button"
+              className="pill red pillBtn"
+              onClick={() => toggleTop("rejected")}
+            >
               נדחה: {rejectedTotal}
             </button>
           </div>
@@ -890,7 +1038,11 @@ export default function Admin() {
                 <span className="topTableCount">({topItems.length})</span>
               </div>
 
-              <button className="adminBtn small" type="button" onClick={() => setTopTable(null)}>
+              <button
+                className="adminBtn small"
+                type="button"
+                onClick={() => setTopTable(null)}
+              >
                 סגור
               </button>
             </div>
