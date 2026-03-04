@@ -439,10 +439,10 @@ body{
   box-shadow: 0 0 0 3px rgba(56, 209, 138, 0.18);
   flex: 0 0 auto;
 }
-
 /* =========================
-   MODAL (DETAILS)
+   MODALS (DETAILS + RECEIPT) — CLEAN
 ========================= */
+
 .modalOverlay{
   position: fixed;
   inset: 0;
@@ -453,16 +453,17 @@ body{
   align-items: center;
   justify-content: center;
   padding: 18px;
-  z-index: 9999;
+  z-index: 100000;
 }
 
+/* -------- Details Modal -------- */
 .modalCard{
   width: min(920px, 96vw);
   max-height: 88vh;
-  background: rgba(255,255,255,0.92);
+  background: rgba(255,255,255,0.94);
   border: 1px solid rgba(74,168,255,0.22);
-  border-radius: 24px;
-  box-shadow: 0 28px 100px rgba(0,0,0,.38);
+  border-radius: 22px;
+  box-shadow: 0 28px 90px rgba(0,0,0,.35);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -493,7 +494,6 @@ body{
   margin:0;
   font-size:18px;
   font-weight:1000;
-  color:var(--text);
 }
 
 .modalTitle small{
@@ -515,13 +515,15 @@ body{
   display:flex;
   align-items:center;
   justify-content:center;
+  transition: transform .12s ease, opacity .12s ease;
 }
+.modalClose:hover{ transform: translateY(-1px); opacity:.95; }
 
 .modalBody{
   padding:16px;
-  direction:rtl;
-  text-align:right;
-  overflow:auto;
+  direction: rtl;
+  text-align: right;
+  overflow: auto;
 }
 
 .chipsRow{
@@ -543,11 +545,6 @@ body{
   background: rgba(255,255,255,.78);
 }
 
-.chip.blue{ background: rgba(74,168,255,0.16); border-color: rgba(74,168,255,0.26); }
-.chip.green{ background: rgba(56,209,138,0.18); border-color: rgba(56,209,138,0.26); }
-.chip.pink{ background: rgba(255,111,177,0.16); border-color: rgba(255,111,177,0.24); }
-.chip.yellow{ background: rgba(255,193,7,0.18); border-color: rgba(255,193,7,0.26); }
-
 .modalGrid{
   display:grid;
   grid-template-columns: 1fr 1fr;
@@ -556,11 +553,11 @@ body{
 }
 
 .fieldCard{
-  background: rgba(255,255,255,.86);
+  background: rgba(255,255,255,.90);
   border: 1px solid rgba(74,168,255,0.16);
   border-radius: 18px;
   padding: 12px;
-  box-shadow: 0 10px 24px rgba(0,0,0,0.06);
+  box-shadow: 0 10px 22px rgba(0,0,0,0.06);
 }
 
 .fieldCard.wide{ grid-column: 1 / -1; }
@@ -577,8 +574,27 @@ body{
   font-weight:1000;
   line-height:1.35;
   word-break: break-word;
-  color:var(--text);
   unicode-bidi: plaintext;
+}
+
+/* מספרים יראו נכון בתוך RTL */
+.fieldValue:has(span.muted),
+.fieldValue,
+.modalGrid .fieldValue{
+  font-variant-numeric: tabular-nums;
+}
+.modalGrid .muted{
+  opacity:.75;
+}
+.modalGrid .muted,
+.modalGrid .fieldValue{
+  /* יישר מספרים/טלפונים יפה */
+  direction: ltr;
+  text-align: left;
+}
+.modalGrid .fieldCard.wide .fieldValue{
+  direction: rtl;
+  text-align: right;
 }
 
 .valuePill{
@@ -615,7 +631,9 @@ body{
   cursor:pointer;
   font-weight:1000;
   background: rgba(0,0,0,.05);
+  transition: transform .12s ease, opacity .12s ease;
 }
+.modalBtn:hover{ transform: translateY(-1px); opacity:.95; }
 
 .modalBtn.primary{
   border:none;
@@ -623,18 +641,17 @@ body{
   background: linear-gradient(90deg, var(--primary), var(--primary2));
 }
 
-/* =========================
-   RECEIPT MODAL (NEW)
-========================= */
+/* -------- Receipt Modal -------- */
 .receiptModal{
-  width: min(900px, 95vw);
-  height: 85vh;
-  background: white;
+  width: min(920px, 96vw);
+  max-height: 88vh;
+  background: rgba(255,255,255,0.95);
+  border: 1px solid rgba(74,168,255,0.28);
   border-radius: 22px;
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 30px 80px rgba(0,0,0,0.4);
+  display:flex;
+  flex-direction:column;
+  box-shadow: 0 28px 90px rgba(0,0,0,.35);
 }
 
 .receiptHeader{
@@ -643,69 +660,10 @@ body{
   justify-content:space-between;
   align-items:center;
   border-bottom:1px solid rgba(0,0,0,0.08);
-  font-weight:1000;
-}
-
-.receiptFrame{
-  flex:1;
-  border:none;
-  width:100%;
-}
-
-/* =========================
-   RESPONSIVE
-========================= */
-@media (max-width: 900px){
-  .groupHead{
-    grid-template-columns: 1fr;
-    align-items:flex-start;
-  }
-  .groupHeadLeft{
-    width:100%;
-    justify-content:flex-start;
-  }
-}
-
-@media (max-width: 760px){
-  .toolRow{
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-  }
-
-  .adminSearch{
-    grid-column: 1 / -1;
-    min-width: 0;
-  }
-
-  .adminSelect{
-    width: 100%;
-    min-width: 0;
-  }
-
-  .adminBtn.small{
-    width: 100%;
-    grid-column: 1 / -1;
-  }
-
-  .actionsCell{
-    min-width: 220px;
-  }
-}
-
-@media (max-width: 640px){
-  .modalGrid{ grid-template-columns: 1fr; }
-  .modalActions .modalBtn{ flex: 1 1 100%; }
-}
-
-@media (max-width: 520px){
-  .adminTable{
-    min-width: 860px;
-  }
-}
-
-.modalOverlay{
-  z-index: 100000; /* חשוב */
+  background:
+    radial-gradient(circle at 15% 35%, rgba(255,233,168,.70), transparent 60%),
+    radial-gradient(circle at 85% 0%, rgba(201,247,212,.60), transparent 55%),
+    linear-gradient(90deg, rgba(184,227,255,.55), rgba(255,255,255,.94));
 }
 
 .receiptHeaderBtns{
@@ -722,66 +680,9 @@ body{
   background: rgba(0,0,0,.05);
   font-weight:1000;
   cursor:pointer;
+  transition: transform .12s ease, opacity .12s ease;
 }
-
-.modalOverlay { z-index: 100000; }
-
-.receiptHeaderBtns{
-  display:flex;
-  align-items:center;
-  gap:10px;
-}
-
-.receiptMini{
-  height:44px;
-  padding:0 12px;
-  border-radius:14px;
-  border:1px solid rgba(0,0,0,.08);
-  background: rgba(0,0,0,.05);
-  font-weight:1000;
-  cursor:pointer;
-}
-
-.receiptModal{
-  width: min(900px, 95vw);
-  height: min(85vh, 800px);
-  background:white;
-  border-radius:20px;
-  overflow:hidden;
-  display:flex;
-  flex-direction:column;
-}
-
-.receiptImg{
-  width:100%;
-  height:100%;
-  object-fit:contain;
-  background:white;
-}
-
-.receiptBody{
-  padding:20px;
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  height:100%;
-}
-
-.receiptImage{
-  max-width:100%;
-  max-height:75vh;
-  object-fit:contain;
-  border-radius:10px;
-}
-
-.receiptModal{
-  width:min(920px, 96vw);
-  max-height: 88vh;
-  background: rgba(255,255,255,0.94);
-  border: 1px solid rgba(74,168,255,0.28);
-  border-radius: 18px;
-  overflow: hidden;
-}
+.receiptMini:hover{ transform: translateY(-1px); opacity:.95; }
 
 .receiptBody{
   padding: 14px;
@@ -790,23 +691,34 @@ body{
   display:flex;
   align-items:center;
   justify-content:center;
+  background: rgba(255,255,255,.65);
 }
 
-.receiptImg{
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  border-radius: 12px;
-  background: #fff;
-}
-
-.receiptEmpty{
-  padding: 18px 14px;
+.receiptFrame{
+  width:100%;
+  height:100%;
+  border:none;
   border-radius: 14px;
-  background: rgba(255,255,255,0.75);
-  border: 1px dashed rgba(0,0,0,0.15);
-  text-align: center;
-  font-weight: 600;
-  opacity: 0.85;
+  background:#fff;
 }
 
+.receiptImage{
+  max-width:100%;
+  max-height:100%;
+  object-fit:contain;
+  border-radius: 14px;
+  background:#fff;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.10);
+}
+
+/* -------- Responsive -------- */
+@media (max-width: 760px){
+  .modalGrid{ grid-template-columns: 1fr; }
+  .modalActions .modalBtn{ flex: 1 1 100%; }
+  .receiptBody{ height: calc(88vh - 64px); padding: 10px; }
+}
+
+@media (max-width: 420px){
+  .modalHeader, .receiptHeader{ padding: 10px 12px; }
+  .modalBody{ padding: 12px; }
+}
