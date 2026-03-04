@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import "./Admin.css"
-const API_BASE = "http://localhost:5050";
-
+const API_BASE = import.meta.env.VITE_API_BASE || "https://rodat-almalak-alsaghir.onrender.com";
 const AGE_LABELS = {
   "6m-1y": "6 أشهر - سنة",
   "1y-1.5y": "سنة - سنة ونص",

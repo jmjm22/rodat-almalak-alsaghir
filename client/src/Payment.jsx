@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import "./App.css";
 
-const API_BASE = "http://localhost:5050";
+const API_BASE = "https://rodat-almalak-alsaghir.onrender.com";
 const DEPOSIT_AMOUNT = 300;
 
 export default function Payment() {
