@@ -1,15 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import "./Admin.css";
-import { createPortal } from "react-dom";
 
 const API_BASE =
   import.meta.env.VITE_API_BASE || "https://rodat-almalak-alsaghir.onrender.com";
-
-/* ✅ Portal מחוץ לרנדר (פותרים ESLint) */
-function Portal({ children }) {
-  return createPortal(children, document.body);
-}
 
 const AGE_LABELS = {
   "6m-1y": "6 أشهر - سنة",
@@ -175,14 +169,37 @@ function AdminTable({
   const [q, setQ] = useState("");
   const [details, setDetails] = useState(null);
 
-  const [receiptView, setReceiptView] = useState(null);
+  // ✅ Receipt viewer (blob) - works for image/pdf
+  const [receiptView, setReceiptView] = useState(null); // { url, type }
 
   const showReceipt = !waitingActions;
 
-  const openReceipt = (x) => {
+  const closeReceipt = () => {
+    if (receiptView?.url) URL.revokeObjectURL(receiptView.url);
+    setReceiptView(null);
+  };
+
+  const openReceipt = async (x) => {
     const id = getRowId(x);
     if (!id) return;
-    setReceiptView(receiptLinkById(id));
+
+    try {
+      const url = receiptLinkById(id);
+      const res = await fetch(url);
+
+      if (!res.ok) {
+        alert("לא הצלחתי לפתוח קבלה (אין קובץ/בעיה בשרת)");
+        return;
+      }
+
+      const type = res.headers.get("content-type") || "";
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+
+      setReceiptView({ url: objUrl, type });
+    } catch {
+      alert("בעיה בחיבור/פתיחת קבלה");
+    }
   };
 
   const stats = useMemo(() => {
@@ -229,9 +246,12 @@ function AdminTable({
       ({ waiting: 0, new: 1, approved: 2, rejected: 3 }[s || "new"] ?? 9);
 
     return [...base].sort((a, b) => {
-      if (sortBy === "dateAsc") return new Date(a.createdAt) - new Date(b.createdAt);
-      if (sortBy === "dateDesc") return new Date(b.createdAt) - new Date(a.createdAt);
-      if (sortBy === "stay") return Number(a.stayUntil || 99) - Number(b.stayUntil || 99);
+      if (sortBy === "dateAsc")
+        return new Date(a.createdAt) - new Date(b.createdAt);
+      if (sortBy === "dateDesc")
+        return new Date(b.createdAt) - new Date(a.createdAt);
+      if (sortBy === "stay")
+        return Number(a.stayUntil || 99) - Number(b.stayUntil || 99);
       return rank(a.status) - rank(b.status);
     });
   }, [items, statusFilter, stayFilter, sortBy, q, hideWaiting]);
@@ -467,6 +487,7 @@ function AdminTable({
                 <td className="cellPhone">
                   {displayILPhone(x.motherPhone) || "-"}
                 </td>
+
                 <td>{x.fatherName || "-"}</td>
                 <td className="cellPhone">
                   {displayILPhone(x.fatherPhone) || "-"}
@@ -484,17 +505,17 @@ function AdminTable({
 
                 {showReceipt ? (
                   <td>
-                   {x.hasReceipt ? (
-  <button
-    className="receiptLink"
-    type="button"
-    onClick={() => openReceipt(x)}
-  >
-    פתח
-  </button>
-) : (
-  "-"
-)}
+                    {x.receipt ? (
+                      <button
+                        className="receiptLink"
+                        type="button"
+                        onClick={() => openReceipt(x)}
+                      >
+                        פתח
+                      </button>
+                    ) : (
+                      "-"
+                    )}
                   </td>
                 ) : null}
 
@@ -531,9 +552,7 @@ function AdminTable({
                           window.open(
                             waLink(
                               x.motherPhone,
-                              `🌸 روضة الملاك الصغير\n\nأصبح هناك مكان متاح الآن.\nهل ما زلتم ترغبون بتسجيل الطفل ${
-                                x.childFullName || ""
-                              } ؟`
+                              `🌸 روضة الملاك الصغير\n\nأصبح هناك مكان متاح الآن.\nهل ما زلتم ترغبون بتسجيل الطفل ${x.childFullName || ""} ؟`
                             ),
                             "_blank"
                           )
@@ -594,224 +613,221 @@ function AdminTable({
         <div className="adminEmpty">אין תוצאות לפי הסינון.</div>
       ) : null}
 
-      {/* ✅ Details Modal */}
+      {/* Details Modal */}
       {details ? (
-        <Portal>
-          <div className="modalOverlay" onClick={() => setDetails(null)}>
-            <div className="modalCard" onClick={(e) => e.stopPropagation()}>
-              <div className="modalHeader">
-                <div className="modalTitle">
-                  <h3>פרטי הרשמה</h3>
-                  <small>
-                    {details.createdAt ? formatCreatedAtIL(details.createdAt) : ""}
-                  </small>
-                </div>
-
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span className={`statusPill s-${details.status || "new"}`}>
-                    {STATUS_LABEL[details.status || "new"] ||
-                      (details.status || "new")}
-                  </span>
-
-                  <button
-                    className="modalClose"
-                    type="button"
-                    onClick={() => setDetails(null)}
-                  >
-                    ✕
-                  </button>
-                </div>
+        <div className="modalOverlay" onClick={() => setDetails(null)}>
+          <div className="modalCard" onClick={(e) => e.stopPropagation()}>
+            <div className="modalHeader">
+              <div className="modalTitle">
+                <h3>פרטי הרשמה</h3>
+                <small>
+                  {details.createdAt ? formatCreatedAtIL(details.createdAt) : ""}
+                </small>
               </div>
 
-              <div className="modalBody">
-                <div className="chipsRow">
-                  <span className={`chip ${groupBadgeClass(details.ageGroup)}`}>
-                    {AGE_LABELS[details.ageGroup] || details.ageGroup || "-"}
-                  </span>
-                  <span className="chip pink">
-                    עד שעה: {details.stayUntil ? `${details.stayUntil}:00` : "-"}
-                  </span>
-                  <span className="chip green">
-                    טל׳ אמא: {displayILPhone(details.motherPhone) || "-"}
-                  </span>
-                </div>
-
-                <div className="modalGrid">
-                  <div className="fieldCard">
-                    <div className="fieldLabel">שם הילד</div>
-                    <div className="fieldValue">
-                      {details.childFullName || "-"}
-                    </div>
-                  </div>
-
-                  <div className="fieldCard">
-                    <div className="fieldLabel">תאריך לידה</div>
-                    <div className="fieldValue">
-                      {formatBirthDateIL(details.birthDate) || "-"}
-                    </div>
-                  </div>
-
-                  <div className="fieldCard">
-                    <div className="fieldLabel">ת.ז ילד</div>
-                    <div className="fieldValue">{details.childId || "-"}</div>
-                  </div>
-
-                  <div className="fieldCard">
-                    <div className="fieldLabel">אמא</div>
-                    <div className="fieldValue">
-                      {details.motherName || "-"}{" "}
-                      <span className="muted">
-                        ({displayILPhone(details.motherPhone) || "-"})
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="fieldCard">
-                    <div className="fieldLabel">אבא</div>
-                    <div className="fieldValue">
-                      {details.fatherName || "-"}{" "}
-                      <span className="muted">
-                        ({displayILPhone(details.fatherPhone) || "-"})
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="fieldCard wide">
-                    <div className="fieldLabel">כתובת</div>
-                    <div className="fieldValue">{details.address || "-"}</div>
-                  </div>
-
-                  <div className="fieldCard">
-                    <div className="fieldLabel">אלרגיה</div>
-                    <div className="fieldValue">
-                      {String(details.hasAllergy || "").toLowerCase() === "yes" ? (
-                        <span className="valuePill ok">כן</span>
-                      ) : (
-                        <span className="valuePill no">לא</span>
-                      )}{" "}
-                      {details.allergyDetails ? `— ${details.allergyDetails}` : ""}
-                    </div>
-                  </div>
-
-                  <div className="fieldCard">
-                    <div className="fieldLabel">מחלה</div>
-                    <div className="fieldValue">
-                      {String(details.hasDisease || "").toLowerCase() === "yes" ? (
-                        <span className="valuePill warn">כן</span>
-                      ) : (
-                        <span className="valuePill no">לא</span>
-                      )}{" "}
-                      {details.diseaseDetails ? `— ${details.diseaseDetails}` : ""}
-                    </div>
-                  </div>
-
-                  <div className="fieldCard wide">
-                    <div className="fieldLabel">הערות</div>
-                    <div className="fieldValue">{details.notes || "-"}</div>
-                  </div>
-
-                  {details.receipt ? (
-                    <div className="fieldCard wide">
-                      <div className="fieldLabel">קבלה</div>
-                      <div className="fieldValue">
-                        <button
-                          className="receiptLink"
-                          type="button"
-                          onClick={() => openReceipt(details)}
-                        >
-                          פתח קבלה
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-
-              <div className="modalActions">
-                <button
-                  className="modalBtn"
-                  type="button"
-                  onClick={() =>
-                    navigator.clipboard.writeText(
-                      displayILPhone(details.motherPhone || "")
-                    )
-                  }
-                >
-                  העתק טל׳ אמא
-                </button>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span className={`statusPill s-${details.status || "new"}`}>
+                  {STATUS_LABEL[details.status || "new"] ||
+                    (details.status || "new")}
+                </span>
 
                 <button
-                  className="modalBtn"
-                  type="button"
-                  onClick={() =>
-                    window.open(
-                      waLink(
-                        details.motherPhone,
-                        `שלום, לגבי ההרשמה של ${details.childFullName || ""}`
-                      ),
-                      "_blank"
-                    )
-                  }
-                >
-                  וואטסאפ לאמא
-                </button>
-
-                <button
-                  className="modalBtn primary"
+                  className="modalClose"
                   type="button"
                   onClick={() => setDetails(null)}
                 >
-                  סגור
+                  ✕
                 </button>
               </div>
             </div>
+
+            <div className="modalBody">
+              <div className="chipsRow">
+                <span className={`chip ${groupBadgeClass(details.ageGroup)}`}>
+                  {AGE_LABELS[details.ageGroup] || details.ageGroup || "-"}
+                </span>
+                <span className="chip pink">
+                  עד שעה: {details.stayUntil ? `${details.stayUntil}:00` : "-"}
+                </span>
+                <span className="chip green">
+                  טל׳ אמא: {displayILPhone(details.motherPhone) || "-"}
+                </span>
+              </div>
+
+              <div className="modalGrid">
+                <div className="fieldCard">
+                  <div className="fieldLabel">שם הילד</div>
+                  <div className="fieldValue">{details.childFullName || "-"}</div>
+                </div>
+
+                <div className="fieldCard">
+                  <div className="fieldLabel">תאריך לידה</div>
+                  <div className="fieldValue">
+                    {formatBirthDateIL(details.birthDate) || "-"}
+                  </div>
+                </div>
+
+                <div className="fieldCard">
+                  <div className="fieldLabel">ת.ז ילד</div>
+                  <div className="fieldValue">{details.childId || "-"}</div>
+                </div>
+
+                <div className="fieldCard">
+                  <div className="fieldLabel">אמא</div>
+                  <div className="fieldValue">
+                    {details.motherName || "-"}{" "}
+                    <span className="muted">
+                      ({displayILPhone(details.motherPhone) || "-"})
+                    </span>
+                  </div>
+                </div>
+
+                <div className="fieldCard">
+                  <div className="fieldLabel">אבא</div>
+                  <div className="fieldValue">
+                    {details.fatherName || "-"}{" "}
+                    <span className="muted">
+                      ({displayILPhone(details.fatherPhone) || "-"})
+                    </span>
+                  </div>
+                </div>
+
+                <div className="fieldCard wide">
+                  <div className="fieldLabel">כתובת</div>
+                  <div className="fieldValue">{details.address || "-"}</div>
+                </div>
+
+                <div className="fieldCard">
+                  <div className="fieldLabel">אלרגיה</div>
+                  <div className="fieldValue">
+                    {String(details.hasAllergy || "").toLowerCase() === "yes" ? (
+                      <span className="valuePill ok">כן</span>
+                    ) : (
+                      <span className="valuePill no">לא</span>
+                    )}{" "}
+                    {details.allergyDetails ? `— ${details.allergyDetails}` : ""}
+                  </div>
+                </div>
+
+                <div className="fieldCard">
+                  <div className="fieldLabel">מחלה</div>
+                  <div className="fieldValue">
+                    {String(details.hasDisease || "").toLowerCase() === "yes" ? (
+                      <span className="valuePill warn">כן</span>
+                    ) : (
+                      <span className="valuePill no">לא</span>
+                    )}{" "}
+                    {details.diseaseDetails ? `— ${details.diseaseDetails}` : ""}
+                  </div>
+                </div>
+
+                <div className="fieldCard wide">
+                  <div className="fieldLabel">הערות</div>
+                  <div className="fieldValue">{details.notes || "-"}</div>
+                </div>
+
+                {details.receipt ? (
+                  <div className="fieldCard wide">
+                    <div className="fieldLabel">קבלה</div>
+                    <div className="fieldValue">
+                      <button
+                        className="receiptLink"
+                        type="button"
+                        onClick={() => openReceipt(details)}
+                      >
+                        פתח קבלה
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="modalActions">
+              <button
+                className="modalBtn"
+                type="button"
+                onClick={() =>
+                  navigator.clipboard.writeText(
+                    displayILPhone(details.motherPhone || "")
+                  )
+                }
+              >
+                העתק טל׳ אמא
+              </button>
+
+              <button
+                className="modalBtn"
+                type="button"
+                onClick={() =>
+                  window.open(
+                    waLink(
+                      details.motherPhone,
+                      `שלום, לגבי ההרשמה של ${details.childFullName || ""}`
+                    ),
+                    "_blank"
+                  )
+                }
+              >
+                וואטסאפ לאמא
+              </button>
+
+              <button
+                className="modalBtn primary"
+                type="button"
+                onClick={() => setDetails(null)}
+              >
+                סגור
+              </button>
+            </div>
           </div>
-        </Portal>
+        </div>
       ) : null}
 
-      {/* ✅ Receipt Modal (same tab) */}
-    {receiptView ? (
-  <Portal>
-    <div className="modalOverlay" onClick={() => setReceiptView(null)}>
-      <div className="receiptModal" onClick={(e) => e.stopPropagation()}>
-        
-        <div className="receiptHeader">
-          <h3>קבלה</h3>
+      {/* Receipt Modal (same page) */}
+      {receiptView ? (
+        <div className="modalOverlay" onClick={closeReceipt}>
+          <div className="receiptModal" onClick={(e) => e.stopPropagation()}>
+            <div className="receiptHeader">
+              <h3>קבלה</h3>
 
-          <div className="receiptHeaderBtns">
-            <button
-              className="receiptMini"
-              type="button"
-              onClick={() => {
-                window.open(receiptView, "_blank");
-              }}
-            >
-              פתח בדף
-            </button>
+              <div className="receiptHeaderBtns">
+                <button
+                  className="receiptMini"
+                  type="button"
+                  onClick={() => window.open(receiptView.url, "_blank")}
+                >
+                  פתח בדף
+                </button>
 
-            <button
-              className="modalClose"
-              type="button"
-              onClick={() => setReceiptView(null)}
-            >
-              ✕
-            </button>
+                <button
+                  className="modalClose"
+                  type="button"
+                  onClick={closeReceipt}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="receiptBody">
+              {receiptView.type.includes("pdf") ? (
+                <iframe
+                  className="receiptFrame"
+                  src={receiptView.url}
+                  title="receipt"
+                />
+              ) : (
+                <img
+                  className="receiptImage"
+                  src={receiptView.url}
+                  alt="receipt"
+                />
+              )}
+            </div>
           </div>
         </div>
-
-        {/* כאן מציגים את התמונה */}
-        <div className="receiptBody">
-          <img
-            src={receiptView}
-            alt="receipt"
-            className="receiptImage"
-          />
-        </div>
-
-      </div>
-    </div>
-  </Portal>
-) : null}
+      ) : null}
     </div>
   );
 }
@@ -827,12 +843,7 @@ function GroupCard({ title, items, onRefresh, isOpen, onToggle }) {
 
   return (
     <div className={`groupCard ${isOpen ? "open" : "closed"}`}>
-      <button
-        className="groupHead"
-        type="button"
-        onClick={onToggle}
-        aria-expanded={isOpen}
-      >
+      <button className="groupHead" type="button" onClick={onToggle} aria-expanded={isOpen}>
         <div className="groupHeadRight">
           <div className="groupTitle">
             {title}
@@ -980,39 +991,19 @@ export default function Admin() {
           <h2 className="adminH2">لوحة الإدارة — التسجيلات</h2>
 
           <div className="adminPills">
-            <button
-              type="button"
-              className="pill pillBtn"
-              onClick={() => toggleTop("all")}
-            >
+            <button type="button" className="pill pillBtn" onClick={() => toggleTop("all")}>
               סה״כ: {items.length}
             </button>
-            <button
-              type="button"
-              className="pill green pillBtn"
-              onClick={() => toggleTop("new")}
-            >
+            <button type="button" className="pill green pillBtn" onClick={() => toggleTop("new")}>
               חדש: {newTotal}
             </button>
-            <button
-              type="button"
-              className="pill yellow pillBtn"
-              onClick={() => toggleTop("waiting")}
-            >
+            <button type="button" className="pill yellow pillBtn" onClick={() => toggleTop("waiting")}>
               ממתין: {waitingTotal}
             </button>
-            <button
-              type="button"
-              className="pill blue pillBtn"
-              onClick={() => toggleTop("approved")}
-            >
+            <button type="button" className="pill blue pillBtn" onClick={() => toggleTop("approved")}>
               מאושר: {approvedTotal}
             </button>
-            <button
-              type="button"
-              className="pill red pillBtn"
-              onClick={() => toggleTop("rejected")}
-            >
+            <button type="button" className="pill red pillBtn" onClick={() => toggleTop("rejected")}>
               נדחה: {rejectedTotal}
             </button>
           </div>
@@ -1045,11 +1036,7 @@ export default function Admin() {
                 <span className="topTableCount">({topItems.length})</span>
               </div>
 
-              <button
-                className="adminBtn small"
-                type="button"
-                onClick={() => setTopTable(null)}
-              >
+              <button className="adminBtn small" type="button" onClick={() => setTopTable(null)}>
                 סגור
               </button>
             </div>

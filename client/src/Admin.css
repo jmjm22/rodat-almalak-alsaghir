@@ -773,3 +773,39 @@ body{
   object-fit:contain;
   border-radius:10px;
 }
+
+.receiptModal{
+  width:min(920px, 96vw);
+  max-height: 88vh;
+  background: rgba(255,255,255,0.94);
+  border: 1px solid rgba(74,168,255,0.28);
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+.receiptBody{
+  padding: 14px;
+  height: calc(88vh - 64px);
+  overflow: auto;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.receiptImg{
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.receiptEmpty{
+  padding: 18px 14px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.75);
+  border: 1px dashed rgba(0,0,0,0.15);
+  text-align: center;
+  font-weight: 600;
+  opacity: 0.85;
+}
