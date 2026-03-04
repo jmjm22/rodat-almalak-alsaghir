@@ -92,7 +92,7 @@ function toClient(x) {
     id,
     ...rest,
     receipt: receiptMeta,
-    hasReceipt: !!obj.receipt?.data, // ✅ עוזר באדמין
+    hasReceipt: !!obj.receipt?.data,
   };
 }
 
@@ -119,7 +119,9 @@ async function promoteWaitingIfPossible(ageGroup) {
     const cap = await getCapacity(ageGroup);
     if (!cap.hasPlace) break;
 
-    const waiting = await Registration.findOne({ ageGroup, status: "waiting" }).sort({ createdAt: 1 });
+    const waiting = await Registration.findOne({ ageGroup, status: "waiting" }).sort({
+      createdAt: 1,
+    });
     if (!waiting) break;
 
     waiting.status = "new";
@@ -153,7 +155,7 @@ async function isDuplicate(body) {
 }
 
 /* =========================
-   Multer (Memory) ✅
+   Multer (Memory)
 ========================= */
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -170,7 +172,9 @@ app.post("/api/registrations", async (req, res) => {
     const allowWaiting = body.allowWaiting === true;
     const ageGroup = (body.ageGroup || "").trim();
 
-    if (!AGE_GROUPS.has(ageGroup)) return res.status(400).json({ error: "Invalid ageGroup" });
+    if (!AGE_GROUPS.has(ageGroup)) {
+      return res.status(400).json({ error: "Invalid ageGroup" });
+    }
 
     if (!String(body.childId || "").trim()) {
       return res.status(400).json({ error: "Missing childId", message: "חסר ת.ז ילד" });
@@ -181,7 +185,9 @@ app.post("/api/registrations", async (req, res) => {
     }
 
     if (await isDuplicate(body)) {
-      return res.status(409).json({ error: "duplicate", message: "❌ כבר קיימת הרשמה עבור הילד/ה עם הפרטים הללו." });
+      return res
+        .status(409)
+        .json({ error: "duplicate", message: "❌ כבר קיימת הרשמה עבור הילד/ה עם הפרטים הללו." });
     }
 
     const cap = await getCapacity(ageGroup);
@@ -209,37 +215,60 @@ app.post("/api/registrations", async (req, res) => {
       receipt: null,
     });
 
-    res.json({ ok: true, item: toClient(item), message: full ? "נכנסתם לרשימת המתנה." : "ההרשמה נקלטה בהצלחה." });
-  } catch {
-    res.status(500).json({ error: "Server error" });
+    return res.json({
+      ok: true,
+      item: toClient(item),
+      message: full ? "נכנסתם לרשימת המתנה." : "ההרשמה נקלטה בהצלחה.",
+    });
+  } catch (e) {
+    console.error("❌ create registration error:", e);
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
 app.get("/api/registrations", async (_, res) => {
-  const items = await Registration.find({}).sort({ createdAt: -1 });
-  res.json(items.map(toClient));
+  try {
+    const items = await Registration.find({}).sort({ createdAt: -1 });
+    return res.json(items.map(toClient));
+  } catch (e) {
+    console.error("❌ list registrations error:", e);
+    return res.status(500).json({ error: "Server error" });
+  }
 });
 
 app.get("/api/registrations/:id", async (req, res) => {
   try {
-    const item = await Registration.findById(req.params.id);
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "bad_id", message: "id לא תקין" });
+    }
+
+    const item = await Registration.findById(id);
     if (!item) return res.status(404).json({ error: "Not found" });
-    res.json({ ok: true, item: toClient(item) });
-  } catch {
-    res.status(500).json({ error: "Server error" });
+
+    return res.json({ ok: true, item: toClient(item) });
+  } catch (e) {
+    console.error("❌ get registration error:", e);
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
-/* ✅ Upload receipt -> MongoDB */
+/* ✅ Upload receipt -> MongoDB (with id validation + logs) */
 app.post("/api/registrations/:id/receipt", upload.single("receipt"), async (req, res) => {
   try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "bad_id", message: "id לא תקין" });
+    }
+
     if (!req.file) return res.status(400).json({ error: "No file", message: "לא נבחר קובץ" });
 
     if (!req.file.mimetype?.startsWith("image/")) {
       return res.status(400).json({ error: "bad_type", message: "יש להעלות תמונה בלבד" });
     }
 
-    const item = await Registration.findById(req.params.id);
+    const item = await Registration.findById(id);
     if (!item) return res.status(404).json({ error: "Not found" });
 
     item.receipt = {
@@ -250,20 +279,29 @@ app.post("/api/registrations/:id/receipt", upload.single("receipt"), async (req,
     };
 
     await item.save();
-    res.json({ ok: true, item: toClient(item) });
+    return res.json({ ok: true, item: toClient(item) });
   } catch (e) {
+    console.error("❌ receipt upload error:", e);
     const msg = e?.message || "";
     if (msg.includes("File too large")) {
-      return res.status(413).json({ error: "file_too_large", message: "הקובץ גדול מדי (מקסימום 5MB)" });
+      return res
+        .status(413)
+        .json({ error: "file_too_large", message: "הקובץ גדול מדי (מקסימום 5MB)" });
     }
-    res.status(500).json({ error: "Server error" });
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
-/* ✅ View receipt (FIXED HEADERS) */
+/* ✅ View receipt (id validation + correct headers) */
 app.get("/api/registrations/:id/receipt", async (req, res) => {
   try {
-    const item = await Registration.findById(req.params.id).select("receipt").lean();
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).send("Invalid id");
+    }
+
+    const item = await Registration.findById(id).select("receipt").lean();
     if (!item?.receipt?.data) return res.status(404).send("No receipt");
 
     const buf = item.receipt.data;
@@ -273,12 +311,12 @@ app.get("/api/registrations/:id/receipt", async (req, res) => {
     res.setHeader("Content-Disposition", "inline");
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Cache-Control", "no-store");
-    res.setHeader("Accept-Ranges", "bytes");
     res.setHeader("Content-Length", buf.length);
 
     return res.send(buf);
-  } catch {
-    res.status(500).send("Server error");
+  } catch (e) {
+    console.error("❌ receipt view error:", e);
+    return res.status(500).send("Server error");
   }
 });
 
@@ -287,20 +325,36 @@ app.patch("/api/registrations/:id", async (req, res) => {
     const body = req.body || {};
     const id = req.params.id;
 
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "bad_id", message: "id לא תקין" });
+    }
+
     const current = await Registration.findById(id);
     if (!current) return res.status(404).json({ error: "Not found" });
 
     const nextStatus = body.status !== undefined ? String(body.status) : undefined;
     const nextAgeGroup = body.ageGroup !== undefined ? String(body.ageGroup).trim() : undefined;
 
-    if (nextStatus !== undefined && !VALID_STATUS.has(nextStatus)) return res.status(400).json({ error: "Invalid status" });
-    if (nextAgeGroup !== undefined && nextAgeGroup && !AGE_GROUPS.has(nextAgeGroup)) return res.status(400).json({ error: "Invalid ageGroup" });
+    if (nextStatus !== undefined && !VALID_STATUS.has(nextStatus)) {
+      return res.status(400).json({ error: "Invalid status" });
+    }
+
+    if (nextAgeGroup !== undefined && nextAgeGroup && !AGE_GROUPS.has(nextAgeGroup)) {
+      return res.status(400).json({ error: "Invalid ageGroup" });
+    }
 
     if (nextStatus === "approved" && current.approvedNotifiedAt) {
-      return res.status(409).json({ error: "already_notified", message: "כבר נשלחה הודעת 'מאושר' עבור ההרשמה הזו." });
+      return res.status(409).json({
+        error: "already_notified",
+        message: "כבר נשלחה הודעת 'מאושר' עבור ההרשמה הזו.",
+      });
     }
+
     if (nextStatus === "rejected" && current.rejectedNotifiedAt) {
-      return res.status(409).json({ error: "already_notified", message: "כבר נשלחה הודעת 'נדחה' עבור ההרשמה הזו." });
+      return res.status(409).json({
+        error: "already_notified",
+        message: "כבר נשלחה הודעת 'נדחה' עבור ההרשמה הזו.",
+      });
     }
 
     const prevStatus = current.status || "new";
@@ -321,15 +375,22 @@ app.patch("/api/registrations/:id", async (req, res) => {
       await promoteWaitingIfPossible(prevAgeGroup);
     }
 
-    res.json({ ok: true, item: toClient(current) });
-  } catch {
-    res.status(500).json({ error: "Server error" });
+    return res.json({ ok: true, item: toClient(current) });
+  } catch (e) {
+    console.error("❌ patch registration error:", e);
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
 app.delete("/api/registrations/:id", async (req, res) => {
   try {
-    const item = await Registration.findById(req.params.id);
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "bad_id", message: "id לא תקין" });
+    }
+
+    const item = await Registration.findById(id);
     if (!item) return res.status(404).json({ error: "Not found" });
 
     const ageGroup = item.ageGroup;
@@ -341,22 +402,28 @@ app.delete("/api/registrations/:id", async (req, res) => {
       await promoteWaitingIfPossible(ageGroup);
     }
 
-    res.json({ ok: true });
-  } catch {
-    res.status(500).json({ error: "Server error" });
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("❌ delete registration error:", e);
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
 app.get("/api/capacity", async (_, res) => {
-  const groups = {};
-  for (const g of AGE_GROUPS) {
-    groups[g] = await getCapacity(g);
+  try {
+    const groups = {};
+    for (const g of AGE_GROUPS) {
+      groups[g] = await getCapacity(g);
+    }
+    return res.json({ ok: true, groups });
+  } catch (e) {
+    console.error("❌ capacity error:", e);
+    return res.status(500).json({ error: "Server error" });
   }
-  res.json({ ok: true, groups });
 });
 
 /* =========================
-   Start server AFTER Mongo ✅
+   Start server AFTER Mongo
 ========================= */
 mongoose
   .connect(MONGODB_URI)
